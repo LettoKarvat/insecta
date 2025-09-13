@@ -1,3 +1,4 @@
+// src/app/routes.tsx
 import {
   createBrowserRouter,
   RouterProvider,
@@ -10,12 +11,18 @@ import { Clients } from "@/pages/clients/clients";
 import ClientDetails from "@/pages/clients/client-details";
 import { Products } from "@/pages/products/products";
 import { NewProduct } from "@/pages/products/new-product";
+import ProductDetails from "@/pages/products/product-details";
 import ServiceOrdersPage from "@/pages/service-orders/service-orders";
-import ServiceOrderDetailPage from "@/pages/service-orders/service-order-detail"; // ⬅️ NOVO
+import ServiceOrderDetailPage from "@/pages/service-orders/service-order-detail";
+import ServiceOrderEditPage from "@/pages/service-orders/service-order-edit";
 import { NewServiceOrder } from "@/pages/service-orders/new-service-order";
 import { Calendar } from "@/pages/calendar/calendar";
 import { Settings } from "@/pages/settings/settings";
-import FAESFormPage from "@/pages/faes/faesFormPage";
+
+// ✅ IMPORTS FAES com casing consistente
+import FAESFormPage from "@/pages/faes/FAESFormPage";
+import FAESListPage from "@/pages/faes/FAESListPage";
+import FAESDetailPage from "@/pages/faes/FAESDetailPage";
 
 function RouteErrorBoundary() {
   const err = useRouteError();
@@ -50,17 +57,24 @@ const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <Dashboard /> },
-      { path: "faes/nova", element: <FAESFormPage /> },
+
+      // FAES
+      { path: "faes", element: <FAESListPage /> }, // lista
+      { path: "faes/nova", element: <FAESFormPage /> }, // novo formulário
+      { path: "faes/:id", element: <FAESDetailPage /> }, // detalhe
 
       { path: "clientes", element: <Clients /> },
       { path: "clientes/:id", element: <ClientDetails /> },
 
       { path: "produtos", element: <Products /> },
       { path: "produtos/novo", element: <NewProduct /> },
+      { path: "produtos/:id", element: <ProductDetails /> },
+      { path: "produtos/:id/editar", element: <ProductDetails /> },
 
       { path: "ordens-servico", element: <ServiceOrdersPage /> },
-      { path: "ordens-servico/nova", element: <NewServiceOrder /> }, // ← antes de :id
-      { path: "ordens-servico/:id", element: <ServiceOrderDetailPage /> }, // ← DETALHE
+      { path: "ordens-servico/nova", element: <NewServiceOrder /> },
+      { path: "ordens-servico/:id", element: <ServiceOrderDetailPage /> },
+      { path: "ordens-servico/:id/editar", element: <ServiceOrderEditPage /> },
 
       { path: "agenda", element: <Calendar /> },
       { path: "configuracoes", element: <Settings /> },
@@ -73,3 +87,4 @@ const router = createBrowserRouter([
 export function AppRoutes() {
   return <RouterProvider router={router} />;
 }
+export { router };

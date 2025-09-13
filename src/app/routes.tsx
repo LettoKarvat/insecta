@@ -1,4 +1,4 @@
-// src/routes/index.tsx
+// src/app/routes.tsx
 import {
   createBrowserRouter,
   RouterProvider,
@@ -87,3 +87,4 @@ const router = createBrowserRouter([
 export function AppRoutes() {
   return <RouterProvider router={router} />;
 }
+export { router };
