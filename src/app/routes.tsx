@@ -20,9 +20,9 @@ import { Calendar } from "@/pages/calendar/calendar";
 import { Settings } from "@/pages/settings/settings";
 
 // ✅ IMPORTS FAES com casing consistente
-import FAESFormPage from "@/pages/faes/FAESFormPage";
-import FAESListPage from "@/pages/faes/FAESListPage";
-import FAESDetailPage from "@/pages/faes/FAESDetailPage";
+import FAESFormPage from "@/pages/faes/faesFormPage";
+import FAESListPage from "@/pages/faes/faeslistPage";
+import FAESDetailPage from "@/pages/faes/faesDetailPage";
 
 function RouteErrorBoundary() {
   const err = useRouteError();
