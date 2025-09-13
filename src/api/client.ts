@@ -20,7 +20,7 @@ const IS_NGROK = (() => {
 const ENABLE_AUTH = import.meta.env.VITE_ENABLE_AUTH === "true";
 
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: "https://995ea42fe982.ngrok-free.app" + "/api/v1",
   withCredentials: false, // usamos Bearer, não cookies
   timeout: 30000,
   headers: IS_NGROK ? { "ngrok-skip-browser-warning": "true" } : undefined,
