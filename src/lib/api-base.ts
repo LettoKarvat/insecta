@@ -41,9 +41,8 @@ export function getApiBaseUrl() {
   const isDevPort = /:(5173|5174|3000|8080|8000)$/.test(host);
 
   if (isDevPort) {
-    const proto = window.location.protocol || "http:";
     // Em dev, chama direto o Flask em 5000:
-    return `${proto}//127.0.0.1:5000/api/v1`;
+    return `https://995ea42fe982.ngrok-free.app/api/v1`;
   }
 
   // Produção (mesma origem com /api/v1 atrás de um reverse proxy)
