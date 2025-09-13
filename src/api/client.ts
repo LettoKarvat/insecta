@@ -4,8 +4,18 @@ import toast from "react-hot-toast";
 import { getApiBaseUrl } from "@/lib/api-base";
 
 // Base da API (usa VITE_API_URL se existir; senão, detecta dev/prod)
-const RAW = getApiBaseUrl(); // ex.: "http://127.0.0.1:5000/api/v1" ou "/api/v1"
+const RAW = getApiBaseUrl(); // ex.: "http://127.0.0.1:5000/api/v1" ou "https://xxxx.ngrok-free.app/api/v1"
 export const BASE_URL = (RAW || "/api/v1").replace(/\/+$/, ""); // sem barra no fim
+
+// Detecta host do ngrok para pular o aviso
+const IS_NGROK = (() => {
+  try {
+    const host = new URL(BASE_URL).hostname;
+    return /(^|\.)ngrok(-free)?\.app$/i.test(host);
+  } catch {
+    return false;
+  }
+})();
 
 const ENABLE_AUTH = import.meta.env.VITE_ENABLE_AUTH === "true";
 
@@ -13,6 +23,7 @@ export const apiClient = axios.create({
   baseURL: BASE_URL,
   withCredentials: false, // usamos Bearer, não cookies
   timeout: 30000,
+  headers: IS_NGROK ? { "ngrok-skip-browser-warning": "true" } : undefined,
 });
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -21,6 +32,11 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
   // Headers
   config.headers = config.headers ?? {};
+
+  // Header do ngrok (garante mesmo se alguém sobrescrever em outro lugar)
+  if (IS_NGROK) {
+    (config.headers as any)["ngrok-skip-browser-warning"] = "true";
+  }
 
   // Auth opcional via Bearer
   if (ENABLE_AUTH) {
