@@ -15,7 +15,7 @@ import ServiceOrderDetailPage from "@/pages/service-orders/service-order-detail"
 import { NewServiceOrder } from "@/pages/service-orders/new-service-order";
 import { Calendar } from "@/pages/calendar/calendar";
 import { Settings } from "@/pages/settings/settings";
-import FAESFormPage from "@/pages/faes/FAESFormPage";
+import FAESFormPage from "@/pages/faes/faesFormPage";
 
 function RouteErrorBoundary() {
   const err = useRouteError();
