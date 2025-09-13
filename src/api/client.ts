@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { getApiBaseUrl } from "@/lib/api-base";
 
 // Base da API (usa VITE_API_URL se existir; senão, detecta dev/prod)
-const RAW = getApiBaseUrl(); // ex.: "http://127.0.0.1:5000/api/v1" ou "https://xxxx.ngrok-free.app/api/v1"
+const RAW = getApiBaseUrl(); // ex.:"http://127.0.0.1:5000/api/v1" ou "https://xxxx.ngrok-free.app/api/v1"
 export const BASE_URL = (RAW || "/api/v1").replace(/\/+$/, ""); // sem barra no fim
 
 // Detecta host do ngrok para pular o aviso
