@@ -43,7 +43,7 @@ interface PrintableData {
     recommended_dilution?: string;
     toxicity_action?: string;
     antidote?: string;
-    emergency_phone?: string; // ⬅️ novo
+    emergency_phone?: string;
     garantia?: string;
   }>;
   technicians?: Array<{
@@ -51,20 +51,16 @@ interface PrintableData {
     registry?: string;
     signature_url?: string;
   }>;
-  client_signature?: {
-    name?: string;
-    cpf?: string;
-  };
-  /** Bloco específico do certificado (se o back não mandar, calculamos) */
+  client_signature?: { name?: string; cpf?: string };
   certificate?: {
-    service_type?: string; // ex.: "DESCUPINIZAÇÃO"
-    issue_city?: string; // ex.: "Campo Alegre"
-    execution_days?: number; // ex.: 5
+    service_type?: string;
+    issue_city?: string;
+    execution_days?: number;
     execution_note?: string;
-    validity_months?: number; // ex.: 24
+    validity_months?: number;
     valid_until?: string; // ISO
-    methods?: string[]; // ["Pulverização", "Injeção em madeira", ...]
-    inspections?: string[]; // 4 datas ISO: +6, +12, +18, +24 meses
+    methods?: string[];
+    inspections?: string[]; // ISO dates
   };
   validation_url?: string;
   generated_at?: string;
@@ -77,421 +73,54 @@ const COMPANY_DATA = {
   address: "Rua das hortênsias, Bairro Cascata, 25",
   phone: "47 99755-5271 / 47 9907-7520",
   email: "OCBM@OUTLOOK.COM.BR",
+  license: "Licença Sanitária: N° 11/2025",
   technical_responsible: {
     name: "Filipe Antônio Kroll",
     title: "Engenheiro Ambiental e Sanitarista",
     registry: "CREA/SC: 181022-2",
   },
-  applicator: {
-    name: "Darlan Antonio Rempalski",
-    cnpj: "53.921.773/0001-77",
-  },
-  license: "Licença Sanitária: N° 11/2025",
-  logo_local: "/logo.png", // recomendado: arquivo local .png no /public
-  logo_remote: "https://iili.io/KTFWdQ4.jpg", // fallback .jpg (sem querystring)
-};
-const getLogo = () => COMPANY_DATA.logo_local || COMPANY_DATA.logo_remote;
-
-/* ───────────────── CORES ───────────────── */
-const COLORS = {
-  primary: "#111827", // preto (mais próximo do anexo)
-  accent: "#c1121f", // vermelho discreto
-  green: "#059669",
-  gray: {
-    50: "#f9fafb",
-    100: "#f3f4f6",
-    200: "#e5e7eb",
-    300: "#d1d5db",
-    400: "#9ca3af",
-    500: "#6b7280",
-    600: "#4b5563",
-    700: "#374151",
-    800: "#1f2937",
-    900: "#111827",
-  },
+  applicator: { name: "Darlan Antonio Rempalski", cnpj: "53.921.773/0001-77" },
+  logo_remote: "https://iili.io/KTFWdQ4.jpg",
 };
 
-/* ───────────────── ESTILOS ───────────────── */
-const styles = StyleSheet.create({
-  page: {
-    fontFamily: "Helvetica",
-    fontSize: 10,
-    padding: 40,
-    backgroundColor: "#ffffff",
-    color: COLORS.gray[800],
-  },
+const resolveLogo = (override?: string) => {
+  const cands = [
+    override,
+    COMPANY_DATA.logo_local,
+    COMPANY_DATA.logo_remote,
+  ].filter(Boolean) as string[];
+  const ok = cands.find((u) => /\.(png|jpe?g)$/i.test(u));
+  return ok || "/logo.jpg"; // mantenha um fallback em /public
+};
 
-  /* Header genérico (usado na OS) */
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
-  },
-  logoContainer: { flexDirection: "row", alignItems: "center", flex: 1 },
-  logo: {
-    width: 64,
-    height: 64,
-    marginRight: 12,
-    objectFit: "contain",
-    borderRadius: 6,
-  },
-  companySection: { flex: 1 },
-  companyName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  companyInfo: { fontSize: 9, color: COLORS.gray[600], lineHeight: 1.4 },
-  orderSection: { alignItems: "flex-end" },
-  orderNumber: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    marginBottom: 5,
-  },
-  statusBadge: {
-    backgroundColor: COLORS.green,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: "white",
-    fontSize: 8,
-    fontWeight: "bold",
-    textTransform: "uppercase",
-  },
-  viaLabel: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: COLORS.gray[700],
-    textAlign: "right",
-    marginBottom: 15,
-    paddingHorizontal: 15,
-    paddingVertical: 5,
-    backgroundColor: COLORS.gray[100],
-    borderRadius: 5,
-  },
+/* ───────────────── THEME ───────────────── */
+const THEME = {
+  font: "Helvetica",
+  text: "#0f172a", // slate-900
+  mute: "#475569", // slate-600
+  border: "#e5e7eb",
+  bg: "#ffffff",
+  bgAlt: "#f8fafc", // slate-50
+  primary: "#1e40af", // indigo-800
+  primarySoft: "#dbeafe", // indigo-100
+  success: "#059669",
+  danger: "#b91c1c",
+  warning: "#a16207",
+};
 
-  /* Sections / labels */
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    marginBottom: 10,
-    paddingBottom: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[200],
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  infoGrid: { flexDirection: "row", flexWrap: "wrap" },
-  infoItem: { width: "50%", marginBottom: 6, paddingRight: 10 },
-  infoItemFull: { width: "100%", marginBottom: 6 },
-  label: {
-    fontSize: 8,
-    fontWeight: "bold",
-    color: COLORS.gray[600],
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  value: { fontSize: 10, color: COLORS.gray[800] },
-
-  /* Tabela padrão (OS) */
-  table: { marginTop: 10 },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: COLORS.primary,
-    padding: 8,
-  },
-  tableHeaderText: {
-    color: "white",
-    fontSize: 8,
-    fontWeight: "bold",
-    textAlign: "center",
-    textTransform: "uppercase",
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[200],
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-  },
-  tableRowAlt: { backgroundColor: COLORS.gray[50] },
-  tableCell: {
-    fontSize: 8,
-    color: COLORS.gray[700],
-    textAlign: "center",
-    paddingHorizontal: 4,
-  },
-  productDetails: {
-    fontSize: 7,
-    color: COLORS.gray[500],
-    fontStyle: "italic",
-    marginTop: 2,
-  },
-
-  /* Observações */
-  notesText: {
-    fontSize: 10,
-    color: COLORS.gray[700],
-    lineHeight: 1.5,
-    textAlign: "justify",
-    backgroundColor: COLORS.gray[50],
-    padding: 12,
-    borderRadius: 5,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-  },
-
-  /* Assinaturas (OS) */
-  signaturesContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 30,
-  },
-  signatureBox: {
-    width: "48%",
-    minHeight: 100,
-    borderWidth: 1,
-    borderColor: COLORS.gray[300],
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: COLORS.gray[50],
-  },
-  signatureTitle: {
-    fontSize: 9,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    textAlign: "center",
-    marginBottom: 15,
-    textTransform: "uppercase",
-  },
-  signatureImage: {
-    width: "100%",
-    height: 40,
-    objectFit: "contain",
-    marginBottom: 10,
-  },
-  signatureName: {
-    fontSize: 9,
-    color: COLORS.gray[700],
-    textAlign: "center",
-    fontWeight: "bold",
-  },
-  signatureRegistry: {
-    fontSize: 8,
-    color: COLORS.gray[500],
-    textAlign: "center",
-    marginTop: 2,
-  },
-  signatureLine: {
-    marginTop: 30,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray[400],
-    paddingTop: 5,
-  },
-
-  /* ───────── Estilos específicos do CERTIFICADO ───────── */
-  topHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  brandTitle: {
-    fontSize: 22,
-    letterSpacing: 1.2,
-    fontWeight: 700,
-    color: COLORS.primary,
-  },
-  headerDivider: {
-    height: 2,
-    backgroundColor: COLORS.primary,
-    marginBottom: 10,
-  },
-  headerLogo: { width: 56, height: 56, objectFit: "contain" },
-
-  twoCols: { flexDirection: "row" },
-  col: { flex: 1 },
-  card: {
-    borderWidth: 1,
-    borderColor: COLORS.gray[200],
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 12,
-  },
-  cardTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6 },
-  small: { fontSize: 9, color: COLORS.gray[700], lineHeight: 1.4 },
-
-  certTitle: {
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: 700,
-    marginVertical: 14,
-    color: COLORS.primary,
-  },
-  paragraph: {
-    fontSize: 10,
-    color: COLORS.gray[800],
-    lineHeight: 1.5,
-    textAlign: "justify",
-    marginBottom: 10,
-  },
-
-  thRow: {
-    flexDirection: "row",
-    backgroundColor: COLORS.primary,
-    padding: 6,
-    marginTop: 6,
-  },
-  th: {
-    color: "#fff",
-    fontSize: 8,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    textAlign: "center",
-  },
-  tdRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[200],
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  td: {
-    fontSize: 8,
-    color: COLORS.gray[700],
-    textAlign: "center",
-    paddingHorizontal: 3,
-  },
-  tdNotes: {
-    fontSize: 7,
-    color: COLORS.gray[600],
-    marginTop: 2,
-    fontStyle: "italic",
-  },
-
-  inspRow: { flexDirection: "row", marginTop: 6 },
-  inspCell: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.gray[300],
-    borderRadius: 6,
-    padding: 8,
-    alignItems: "center",
-  },
-  inspGap: { marginLeft: 6 },
-  inspDate: { fontSize: 10, fontWeight: 700, marginBottom: 12 },
-  inspSign: {
-    fontSize: 9,
-    color: COLORS.gray[600],
-    marginTop: 18,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray[300],
-    width: "100%",
-    textAlign: "center",
-    paddingTop: 4,
-  },
-
-  sigs: { flexDirection: "row", marginTop: 14 },
-  sigBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.gray[300],
-    borderRadius: 6,
-    padding: 10,
-    minHeight: 92,
-  },
-  sigGap: { marginLeft: 12 },
-  sigTitle: {
-    fontSize: 10,
-    fontWeight: 700,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  sigLine: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray[400],
-    marginTop: 26,
-    paddingTop: 4,
-    textAlign: "center",
-    fontSize: 9,
-  },
-  sigSub: { textAlign: "center", fontSize: 8, color: COLORS.gray[600] },
-
-  footerCenter: { marginTop: 18, alignItems: "center" },
-  license: { fontSize: 11, fontWeight: 700 },
-
-  // watermark (opcional; se o renderer ignorar opacity, não quebra)
-  wm: {
-    position: "absolute",
-    top: 220,
-    left: 120,
-    width: 320,
-    height: 320,
-    opacity: 0.06,
-  },
-
-  // Footer (OS)
-  footer: {
-    position: "absolute",
-    bottom: 20,
-    left: 40,
-    right: 40,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray[200],
-  },
-  footerText: { fontSize: 8, color: COLORS.gray[500] },
-
-  // QR Code (OS)
-  qrSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.gray[50],
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.gray[200],
-    marginTop: 20,
-  },
-  qrCode: { width: 60, height: 60, marginRight: 15 },
-  qrText: { flex: 1 },
-  qrTitle: {
-    fontSize: 9,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  qrUrl: { fontSize: 8, color: COLORS.gray[600] },
-});
-
-/* ───────────────── UTILITÁRIOS ───────────────── */
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return "–";
+/* ───────────────── UTILS ───────────────── */
+const fmtDate = (iso?: string | null) => {
+  if (!iso) return "–";
   try {
-    return new Date(dateString).toLocaleDateString("pt-BR");
+    return new Date(iso).toLocaleDateString("pt-BR");
   } catch {
     return "–";
   }
 };
-
-const formatDateTime = (dateString?: string | null) => {
-  if (!dateString) return "–";
+const fmtDateTime = (iso?: string | null) => {
+  if (!iso) return "–";
   try {
-    return new Date(dateString).toLocaleString("pt-BR", {
+    return new Date(iso).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -502,19 +131,15 @@ const formatDateTime = (dateString?: string | null) => {
     return "–";
   }
 };
-
 const safeFileName = (s?: string | null) =>
   (s || "")
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, " ")
     .trim();
-
-const generateQRCode = (data: string): string =>
+const generateQRCode = (data: string) =>
   `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
     data
   )}`;
-
-/** soma meses (sem libs) */
 const addMonths = (iso?: string | null, months = 0) => {
   const d = iso ? new Date(iso) : new Date();
   const day = d.getDate();
@@ -523,7 +148,6 @@ const addMonths = (iso?: string | null, months = 0) => {
   if (out.getDate() < day) out.setDate(0);
   return out.toISOString();
 };
-
 const inferServiceType = (items?: PrintableData["items"]) => {
   const txt = (items || [])
     .map((i) => i?.pest || "")
@@ -533,199 +157,409 @@ const inferServiceType = (items?: PrintableData["items"]) => {
   return "DEDETIZAÇÃO";
 };
 
-/* ───────────────── PÁGINA DA ORDEM (vias) ───────────────── */
-const ServiceOrderPage: React.FC<{
-  data: PrintableData;
-  viaIndex: number;
-  isLastPage?: boolean;
-}> = ({ data, viaIndex, isLastPage = false }) => {
+const statusColor = (s?: string) => {
+  const up = (s || "").toUpperCase();
+  if (up.includes("CANCEL")) return THEME.danger;
+  if (up.includes("ABER") || up.includes("AGUARD")) return THEME.warning;
+  if (up.includes("EXEC")) return THEME.success;
+  return THEME.primary;
+};
+
+/* ───────────────── STYLES ───────────────── */
+const S = StyleSheet.create({
+  page: {
+    fontFamily: THEME.font,
+    fontSize: 10,
+    padding: 28,
+    color: THEME.text,
+    backgroundColor: THEME.bg,
+  },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    borderRadius: 8,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  headerLeft: {
+    width: 92,
+    backgroundColor: THEME.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10,
+  },
+  logo: { width: 68, height: 68 },
+  headerRight: { flex: 1, backgroundColor: THEME.primary, padding: 12 },
+  title: { color: "#fff", fontSize: 16, fontWeight: 700 },
+  subtitle: { color: "#e0e7ff", fontSize: 10, marginTop: 2 },
+
+  chipRow: { flexDirection: "row", marginTop: 6, flexWrap: "wrap" },
+  chip: {
+    fontSize: 9,
+    color: THEME.primary,
+    backgroundColor: THEME.primarySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginRight: 6,
+    marginTop: 4,
+  },
+  chipStatus: {
+    fontSize: 9,
+    color: "#fff",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+
+  box: {
+    backgroundColor: THEME.bgAlt,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderStyle: "solid",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: THEME.primary,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+
+  grid: { flexDirection: "row", flexWrap: "wrap" },
+  col: { width: "50%", paddingRight: 8, marginBottom: 8 },
+  colFull: { width: "100%", marginBottom: 8 },
+  label: {
+    fontSize: 8,
+    fontWeight: 700,
+    color: THEME.mute,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  value: { fontSize: 10 },
+
+  table: {
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderStyle: "solid",
+    borderRadius: 8,
+    overflow: "hidden",
+    marginTop: 8,
+  },
+  thead: { flexDirection: "row", backgroundColor: THEME.primary },
+  th: {
+    color: "#fff",
+    fontSize: 8,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    textAlign: "center",
+    paddingVertical: 6,
+  },
+  row: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: THEME.border,
+    borderTopStyle: "solid",
+  },
+  rowAlt: { backgroundColor: THEME.bgAlt },
+  td: {
+    fontSize: 8.5,
+    color: THEME.text,
+    textAlign: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  tdNotes: {
+    fontSize: 7,
+    color: THEME.mute,
+    marginTop: 2,
+    textAlign: "left",
+    fontStyle: "italic",
+  },
+
+  notes: {
+    fontSize: 10,
+    color: THEME.text,
+    lineHeight: 1.5,
+    textAlign: "justify",
+    backgroundColor: THEME.bgAlt,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: THEME.primary,
+    marginTop: 6,
+  },
+
+  sigs: { flexDirection: "row", marginTop: 16 },
+  sigBox: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: THEME.bgAlt,
+  },
+  sigGap: { marginLeft: 12 },
+  sigTitle: {
+    fontSize: 9,
+    fontWeight: 700,
+    textAlign: "center",
+    marginBottom: 10,
+    textTransform: "uppercase",
+    color: THEME.primary,
+  },
+  sigImg: { width: "100%", height: 40, marginBottom: 10 },
+  sigName: { fontSize: 9, textAlign: "center", fontWeight: 700 },
+  sigSub: { fontSize: 8, textAlign: "center", color: THEME.mute, marginTop: 2 },
+  sigLine: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.border,
+    marginTop: 24,
+    paddingTop: 4,
+    textAlign: "center",
+    fontSize: 9,
+  },
+
+  qr: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: THEME.bgAlt,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    marginTop: 12,
+  },
+  qrImg: { width: 64, height: 64, marginRight: 12 },
+  qrTitle: {
+    fontSize: 9,
+    fontWeight: 700,
+    color: THEME.primary,
+    marginBottom: 2,
+  },
+  qrUrl: { fontSize: 8, color: THEME.mute },
+
+  footer: {
+    position: "absolute",
+    bottom: 18,
+    left: 28,
+    right: 28,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: THEME.border,
+  },
+  footerText: { fontSize: 8, color: THEME.mute },
+
+  // CERTIFICADO
+  wm: {
+    position: "absolute",
+    top: 220,
+    left: 120,
+    width: 320,
+    height: 320,
+    opacity: 0.06,
+  },
+  certBrand: {
+    fontSize: 22,
+    letterSpacing: 1.2,
+    fontWeight: 700,
+    color: THEME.primary,
+  },
+  certTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  certLogo: { width: 56, height: 56 },
+  divider: { height: 2, backgroundColor: THEME.primary, marginBottom: 10 },
+  cardsRow: { flexDirection: "row" },
+  card: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 8,
+    padding: 10,
+    marginRight: 8,
+  },
+  cardLast: { marginRight: 0 },
+  cardTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    marginBottom: 6,
+    color: THEME.primary,
+  },
+  small: { fontSize: 9, color: THEME.text, lineHeight: 1.4 },
+  certTitle: {
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: 700,
+    color: THEME.primary,
+    marginVertical: 12,
+  },
+});
+
+/* ───────────────── COMPONENTES ───────────────── */
+const Chip = ({ children }: { children: React.ReactNode }) => (
+  <Text style={S.chip}>{children}</Text>
+);
+const KV = ({ label, value }: { label: string; value?: any }) => (
+  <View style={{ marginBottom: 4 }}>
+    <Text style={S.label}>{label}</Text>
+    <Text style={S.value}>{value ?? "–"}</Text>
+  </View>
+);
+
+/* ───────────────── PÁGINA DA ORDEM (VIA) ───────────────── */
+const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
+  data,
+  viaIndex,
+}) => {
   const viaLabels = ["VIA DO CLIENTE", "VIA DA EMPRESA"];
   const viaLabel = viaLabels[viaIndex - 1] || `VIA ${viaIndex}`;
+  const logoSrc = resolveLogo();
+  const stColor = statusColor(data?.order?.status_text);
 
   return (
-    <Page size="A4" style={styles.page}>
-      <Text style={styles.viaLabel}>{viaLabel}</Text>
-
-      <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <Image src={getLogo()} style={styles.logo} />
-          <View style={styles.companySection}>
-            <Text style={styles.companyName}>{COMPANY_DATA.name}</Text>
-            <Text style={styles.companyInfo}>
-              CNPJ: {COMPANY_DATA.cnpj}
-              {"\n"}
-              {COMPANY_DATA.address}
-              {"\n"}
-              Telefone: {COMPANY_DATA.phone}
-              {"\n"}
-              E-mail: {COMPANY_DATA.email}
-              {"\n"}
-              {COMPANY_DATA.license}
-            </Text>
-          </View>
+    <Page size="A4" style={S.page}>
+      {/* Cabeçalho colorido */}
+      <View style={S.header}>
+        <View style={S.headerLeft}>
+          {logoSrc ? <Image src={logoSrc} style={S.logo} /> : null}
         </View>
-        <View style={styles.orderSection}>
-          <Text style={styles.orderNumber}>
-            {data?.order?.public_code || "–"}
-          </Text>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>
-              {data?.order?.status_text || "EXECUTADO"}
+        <View style={S.headerRight}>
+          <Text style={S.title}>ORDEM DE SERVIÇO</Text>
+          <Text style={S.subtitle}>{COMPANY_DATA.name}</Text>
+          <View style={S.chipRow}>
+            <Chip>Código: {data?.order?.public_code || "–"}</Chip>
+            <Chip>Criação: {fmtDateTime(data?.order?.created_at)}</Chip>
+            {data?.order?.scheduled_at ? (
+              <Chip>Agendada: {fmtDateTime(data.order.scheduled_at)}</Chip>
+            ) : null}
+            <Text
+              style={[
+                S.chipStatus,
+                { backgroundColor: stColor, marginLeft: 6 },
+              ]}
+            >
+              {" "}
+              {data?.order?.status_text || "EXECUTADO"}{" "}
             </Text>
+            <Chip>{viaLabel}</Chip>
           </View>
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Informações da Ordem de Serviço</Text>
-        <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Text style={styles.label}>Data de Criação</Text>
-            <Text style={styles.value}>
-              {formatDateTime(data?.order?.created_at)}
-            </Text>
+      {/* Empresa / Cliente */}
+      <View style={S.box}>
+        <View style={S.grid}>
+          <View style={S.col}>
+            <KV label="Empresa" value={COMPANY_DATA.name} />
           </View>
-          {data?.order?.scheduled_at && (
-            <View style={styles.infoItem}>
-              <Text style={styles.label}>Data Agendada</Text>
-              <Text style={styles.value}>
-                {formatDateTime(data.order.scheduled_at)}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Dados do Cliente</Text>
-        <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Text style={styles.label}>Nome</Text>
-            <Text style={styles.value}>{data?.client?.name || "–"}</Text>
+          <View style={S.col}>
+            <KV label="CNPJ" value={COMPANY_DATA.cnpj} />
           </View>
-          {data?.client?.doc && (
-            <View style={styles.infoItem}>
-              <Text style={styles.label}>Documento</Text>
-              <Text style={styles.value}>{data.client.doc}</Text>
-            </View>
-          )}
-          {data?.client?.phone && (
-            <View style={styles.infoItem}>
-              <Text style={styles.label}>Telefone</Text>
-              <Text style={styles.value}>{data.client.phone}</Text>
-            </View>
-          )}
-          {data?.client?.email && (
-            <View style={styles.infoItem}>
-              <Text style={styles.label}>E-mail</Text>
-              <Text style={styles.value}>{data.client.email}</Text>
-            </View>
-          )}
-          {data?.client?.address && (
-            <View style={styles.infoItemFull}>
-              <Text style={styles.label}>Endereço</Text>
-              <Text style={styles.value}>{data.client.address}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Responsável Técnico</Text>
-        <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Text style={styles.label}>Nome</Text>
-            <Text style={styles.value}>
-              {COMPANY_DATA.technical_responsible.name}
-            </Text>
+          <View style={S.col}>
+            <KV label="Endereço" value={COMPANY_DATA.address} />
           </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.label}>Registro</Text>
-            <Text style={styles.value}>
-              {COMPANY_DATA.technical_responsible.registry}
-            </Text>
+          <View style={S.col}>
+            <KV
+              label="Contato"
+              value={[COMPANY_DATA.phone, COMPANY_DATA.email]
+                .filter(Boolean)
+                .join(" • ")}
+            />
           </View>
-          <View style={styles.infoItemFull}>
-            <Text style={styles.label}>Qualificação</Text>
-            <Text style={styles.value}>
-              {COMPANY_DATA.technical_responsible.title}
-            </Text>
+          <View style={S.col}>
+            <KV label="Cliente" value={data?.client?.name} />
+          </View>
+          <View style={S.col}>
+            <KV label="CNPJ/CPF" value={data?.client?.doc} />
+          </View>
+          <View style={S.colFull}>
+            <KV label="Endereço do Cliente" value={data?.client?.address} />
+          </View>
+          <View style={S.col}>
+            <KV
+              label="Cidade/UF • CEP"
+              value={[data?.client?.city, data?.client?.zip]
+                .filter(Boolean)
+                .join(" • ")}
+            />
+          </View>
+          <View style={S.col}>
+            <KV
+              label="Telefone / E-mail"
+              value={[data?.client?.phone, data?.client?.email]
+                .filter(Boolean)
+                .join(" • ")}
+            />
           </View>
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Aplicador</Text>
-        <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Text style={styles.label}>Nome</Text>
-            <Text style={styles.value}>{COMPANY_DATA.applicator.name}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.label}>CNPJ</Text>
-            <Text style={styles.value}>{COMPANY_DATA.applicator.cnpj}</Text>
-          </View>
-        </View>
-      </View>
-
-      {data?.items && data.items.length > 0 && (
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.sectionTitle}>Produtos Aplicados</Text>
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, { width: "20%" }]}>
-                Praga
-              </Text>
-              <Text style={[styles.tableHeaderText, { width: "30%" }]}>
-                Produto
-              </Text>
-              <Text style={[styles.tableHeaderText, { width: "20%" }]}>
-                Aplicação
-              </Text>
-              <Text style={[styles.tableHeaderText, { width: "15%" }]}>
-                Diluição
-              </Text>
-              <Text style={[styles.tableHeaderText, { width: "15%" }]}>
-                Quantidade
-              </Text>
+      {/* Tabela de Produtos */}
+      {Array.isArray(data?.items) && data!.items!.length > 0 && (
+        <View style={S.box} wrap>
+          <Text style={S.sectionTitle}>Produtos Aplicados</Text>
+          <View style={S.table}>
+            <View style={S.thead}>
+              <Text style={[S.th, { width: "20%" }]}>Praga</Text>
+              <Text style={[S.th, { width: "30%" }]}>Produto</Text>
+              <Text style={[S.th, { width: "18%" }]}>Aplicação</Text>
+              <Text style={[S.th, { width: "16%" }]}>Diluição</Text>
+              <Text style={[S.th, { width: "16%" }]}>Quantidade</Text>
             </View>
-
-            {data.items.map((item, index) => (
-              <View
-                key={index}
-                style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
-              >
-                <View style={{ width: "20%" }}>
-                  <Text style={styles.tableCell}>{item?.pest || "–"}</Text>
+            {data!.items!.map((it, i) => (
+              <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
+                <Text style={[S.td, { width: "20%" }]}>{it?.pest || "–"}</Text>
+                <View style={{ width: "30%", paddingHorizontal: 4 }}>
+                  <Text
+                    style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
+                  >
+                    {it?.product || "–"}
+                  </Text>
+                  {it?.registration_ms ? (
+                    <Text style={S.tdNotes}>Reg. MS: {it.registration_ms}</Text>
+                  ) : null}
+                  {it?.composition ? (
+                    <Text style={S.tdNotes}>Composição: {it.composition}</Text>
+                  ) : null}
+                  {it?.group_chemical ? (
+                    <Text style={S.tdNotes}>Grupo: {it.group_chemical}</Text>
+                  ) : null}
+                  {it?.recommended_dilution ? (
+                    <Text style={S.tdNotes}>
+                      Recomend.: {it.recommended_dilution}
+                    </Text>
+                  ) : null}
+                  {it?.toxicity_action ? (
+                    <Text style={S.tdNotes}>Toxic.: {it.toxicity_action}</Text>
+                  ) : null}
+                  {it?.antidote ? (
+                    <Text style={S.tdNotes}>Antídoto: {it.antidote}</Text>
+                  ) : null}
+                  {it?.emergency_phone ? (
+                    <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
+                  ) : null}
                 </View>
-
-                <View style={{ width: "30%" }}>
-                  <Text style={styles.tableCell}>{item?.product || "–"}</Text>
-                  {item?.registration_ms && (
-                    <Text style={styles.productDetails}>
-                      Reg. MS: {item.registration_ms}
-                    </Text>
-                  )}
-                  {item?.composition && (
-                    <Text style={styles.productDetails}>
-                      Composição: {item.composition}
-                    </Text>
-                  )}
-                  {item?.group_chemical && (
-                    <Text style={styles.productDetails}>
-                      Grupo: {item.group_chemical}
-                    </Text>
-                  )}
-                </View>
-
-                <Text style={[styles.tableCell, { width: "20%" }]}>
-                  {item?.application || "–"}
+                <Text style={[S.td, { width: "18%" }]}>
+                  {it?.application || "–"}
                 </Text>
-                <Text style={[styles.tableCell, { width: "15%" }]}>
-                  {item?.dilution || "–"}
+                <Text style={[S.td, { width: "16%" }]}>
+                  {it?.dilution || "–"}
                 </Text>
-                <Text style={[styles.tableCell, { width: "15%" }]}>
-                  {String(item?.quantity ?? "–")}
+                <Text style={[S.td, { width: "16%" }]}>
+                  {String(it?.quantity ?? "–")}
                 </Text>
               </View>
             ))}
@@ -733,73 +567,61 @@ const ServiceOrderPage: React.FC<{
         </View>
       )}
 
-      {data?.order?.notes && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Observações</Text>
-          <Text style={styles.notesText}>{data.order.notes}</Text>
+      {/* Observações */}
+      {data?.order?.notes ? (
+        <View style={S.box}>
+          <Text style={S.sectionTitle}>Observações</Text>
+          <Text style={S.notes}>{data.order.notes}</Text>
         </View>
-      )}
+      ) : null}
 
-      <View style={styles.signaturesContainer} wrap={false}>
-        <View style={styles.signatureBox}>
-          <Text style={styles.signatureTitle}>Técnico Responsável</Text>
-          {data?.technicians?.[0]?.signature_url && (
-            <Image
-              src={data.technicians[0].signature_url}
-              style={styles.signatureImage}
-            />
-          )}
-          <Text style={styles.signatureName}>
+      {/* Assinaturas */}
+      <View style={S.sigs} wrap={false}>
+        <View style={S.sigBox}>
+          <Text style={S.sigTitle}>Técnico Responsável</Text>
+          {data?.technicians?.[0]?.signature_url ? (
+            <Image src={data.technicians[0].signature_url!} style={S.sigImg} />
+          ) : null}
+          <Text style={S.sigName}>
             {data?.technicians?.[0]?.name ||
               COMPANY_DATA.technical_responsible.name}
           </Text>
-          <Text style={styles.signatureRegistry}>
+          <Text style={S.sigSub}>
             {data?.technicians?.[0]?.registry ||
               COMPANY_DATA.technical_responsible.registry}
           </Text>
-          {!data?.technicians?.[0]?.signature_url && (
-            <View style={styles.signatureLine} />
-          )}
+          {!data?.technicians?.[0]?.signature_url ? (
+            <Text style={S.sigLine}> assinatura </Text>
+          ) : null}
         </View>
-
-        <View style={styles.signatureBox}>
-          <Text style={styles.signatureTitle}>Cliente</Text>
-          <View style={styles.signatureLine} />
-          {data?.client_signature && (
-            <>
-              <Text style={styles.signatureName}>
-                {data.client_signature.name || "–"}
-              </Text>
-              {data.client_signature.cpf && (
-                <Text style={styles.signatureRegistry}>
-                  CPF: {data.client_signature.cpf}
-                </Text>
-              )}
-            </>
-          )}
+        <View style={[S.sigBox, S.sigGap]}>
+          <Text style={S.sigTitle}>Cliente</Text>
+          <Text style={S.sigLine}>{data?.client_signature?.name || " "}</Text>
+          {data?.client_signature?.cpf ? (
+            <Text style={S.sigSub}>CPF: {data.client_signature.cpf}</Text>
+          ) : null}
         </View>
       </View>
 
-      {data?.validation_url && (
-        <View style={styles.qrSection}>
-          <Image
-            src={generateQRCode(data.validation_url)}
-            style={styles.qrCode}
-          />
-          <View style={styles.qrText}>
-            <Text style={styles.qrTitle}>Validação do Documento</Text>
-            <Text style={styles.qrUrl}>{data.validation_url}</Text>
+      {/* Validação (QR) */}
+      {data?.validation_url ? (
+        <View style={S.qr}>
+          <Image src={generateQRCode(data.validation_url)} style={S.qrImg} />
+          <View style={{ flex: 1 }}>
+            <Text style={S.qrTitle}>Validação do Documento</Text>
+            <Text style={S.qrUrl}>{data.validation_url}</Text>
           </View>
         </View>
-      )}
+      ) : null}
 
-      <View style={styles.footer} fixed>
-        <Text style={styles.footerText}>
+      {/* Footer */}
+      <View style={S.footer} fixed>
+        <Text style={S.footerText}>
           Gerado em:{" "}
-          {formatDateTime(data?.generated_at || new Date().toISOString())}
+          {fmtDateTime(data?.generated_at || new Date().toISOString())}
         </Text>
         <Text
-          style={styles.footerText}
+          style={S.footerText}
           render={({ pageNumber, totalPages }) =>
             `Página ${pageNumber} de ${totalPages}`
           }
@@ -812,21 +634,13 @@ const ServiceOrderPage: React.FC<{
 /* ───────────────── PÁGINA DO CERTIFICADO ───────────────── */
 const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
   const items = (data.items || []) as NonNullable<PrintableData["items"]>;
-
-  const maxGarantia = Math.max(
-    0,
-    ...items
-      .map((i) => parseInt(String(i?.garantia || "0"), 10))
-      .filter((n) => isFinite(n))
-  );
-
   const pragas =
     items
       .map((i) => i?.pest)
       .filter(Boolean)
       .join(", ") || "–";
   const methods =
-    (data.certificate?.methods && data.certificate.methods.length > 0
+    (data.certificate?.methods?.length
       ? data.certificate.methods
       : Array.from(
           new Set(
@@ -834,7 +648,6 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
           )
         )
     ).join(" / ") || "–";
-
   const base =
     data.order?.scheduled_at ||
     data.order?.created_at ||
@@ -848,184 +661,177 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
   const issueCity =
     data.certificate?.issue_city || data.client?.city || "Campo Alegre";
   const serviceType = data.certificate?.service_type || inferServiceType(items);
+  const logoSrc = resolveLogo();
 
   return (
-    <Page size="A4" style={styles.page}>
-      {/* Watermark opcional */}
-      <Image src={getLogo()} style={styles.wm} />
-
-      {/* Cabeçalho com marca e logo */}
-      <View style={styles.topHeader}>
-        <Text style={styles.brandTitle}>INSECTA DEDETIZADORA</Text>
-        <Image src={getLogo()} style={styles.headerLogo} />
+    <Page size="A4" style={S.page}>
+      <Image src={logoSrc} style={S.wm} />
+      <View style={S.certTop}>
+        <Text style={S.certBrand}>{COMPANY_DATA.name.toUpperCase()}</Text>
+        {logoSrc ? <Image src={logoSrc} style={S.certLogo} /> : null}
       </View>
-      <View style={styles.headerDivider} />
+      <View style={S.divider} />
 
-      {/* Quadro cliente + validade */}
-      <View style={styles.twoCols}>
-        <View style={styles.col}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Cliente</Text>
-            <Text style={styles.small}>{data?.client?.name || "–"}</Text>
-            {data?.client?.doc && (
-              <Text style={styles.small}>CNPJ/CPF: {data.client.doc}</Text>
-            )}
-            {data?.client?.address && (
-              <Text style={styles.small}>Endereço: {data.client.address}</Text>
-            )}
-            {(data?.client?.city || data?.client?.zip) && (
-              <Text style={styles.small}>
-                Cidade/CEP:{" "}
-                {[data.client?.city, data.client?.zip]
-                  .filter(Boolean)
-                  .join(" • ")}
-              </Text>
-            )}
-            <Text style={[styles.small, { marginTop: 6 }]}>
-              Validade do certificado:{" "}
-              {String((validityMonths / 12).toFixed(0))} ano(s) (
-              {formatDate(validUntil)})
+      <View style={S.cardsRow}>
+        <View style={S.card}>
+          <Text style={S.cardTitle}>Cliente</Text>
+          <Text style={S.small}>{data?.client?.name || "–"}</Text>
+          {data?.client?.doc ? (
+            <Text style={S.small}>CNPJ/CPF: {data.client.doc}</Text>
+          ) : null}
+          {data?.client?.address ? (
+            <Text style={S.small}>Endereço: {data.client.address}</Text>
+          ) : null}
+          {data?.client?.city || data?.client?.zip ? (
+            <Text style={S.small}>
+              Cidade/CEP:{" "}
+              {[data.client?.city, data.client?.zip]
+                .filter(Boolean)
+                .join(" • ")}
             </Text>
-          </View>
+          ) : null}
+          <Text style={[S.small, { marginTop: 6 }]}>
+            Validade do certificado: {String((validityMonths / 12).toFixed(0))}{" "}
+            ano(s) ({fmtDate(validUntil)})
+          </Text>
         </View>
-
-        <View style={styles.col}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Empresa</Text>
-            <Text style={styles.small}>{COMPANY_DATA.name}</Text>
-            <Text style={styles.small}>CNPJ: {COMPANY_DATA.cnpj}</Text>
-            <Text style={styles.small}>{COMPANY_DATA.address}</Text>
-            <Text style={styles.small}>Telefone: {COMPANY_DATA.phone}</Text>
-            <Text style={styles.small}>E-mail: {COMPANY_DATA.email}</Text>
-          </View>
+        <View style={[S.card, S.cardLast]}>
+          <Text style={S.cardTitle}>Empresa</Text>
+          <Text style={S.small}>{COMPANY_DATA.name}</Text>
+          <Text style={S.small}>CNPJ: {COMPANY_DATA.cnpj}</Text>
+          <Text style={S.small}>{COMPANY_DATA.address}</Text>
+          <Text style={S.small}>Telefone: {COMPANY_DATA.phone}</Text>
+          <Text style={S.small}>E-mail: {COMPANY_DATA.email}</Text>
         </View>
       </View>
 
-      <Text style={styles.certTitle}>CERTIFICADO</Text>
-
-      {/* Texto institucional */}
-      <Text style={styles.paragraph}>
-        A empresa {COMPANY_DATA.name}, devidamente licenciada e legalmente
-        habilitada, certifica que realizou o serviço de{" "}
-        {serviceType?.toLowerCase()} no endereço acima mencionado, com a
-        finalidade de controle e eliminação de pragas, garantindo a proteção
-        estrutural do imóvel e a segurança dos ocupantes, em conformidade com as
-        normas técnicas e sanitárias vigentes. Período de execução do serviço:
-        realizado em {String(data.certificate?.execution_days ?? 5)} dia(s)
-        distintos, respeitando as normas técnicas e de segurança.
+      <Text style={S.certTitle}>CERTIFICADO</Text>
+      <Text style={{ fontSize: 10, lineHeight: 1.5, textAlign: "justify" }}>
+        A empresa {COMPANY_DATA.name}, devidamente licenciada, certifica que
+        realizou o serviço de {serviceType.toLowerCase()} no endereço acima,
+        conforme boas práticas e normas sanitárias. Período de execução:{" "}
+        {String(data.certificate?.execution_days ?? 5)} dia(s).{" "}
+        {data.certificate?.execution_note || ""}
       </Text>
 
-      <Text style={styles.sectionTitle}>Pragas controladas</Text>
+      <Text style={S.sectionTitle}>Pragas controladas</Text>
       <Text style={{ fontSize: 10 }}>{pragas}</Text>
 
-      <Text style={styles.sectionTitle}>Método de aplicação</Text>
+      <Text style={S.sectionTitle}>Método de aplicação</Text>
       <Text style={{ fontSize: 10 }}>{methods}</Text>
 
-      {/* Produtos / Regulatórios */}
-      {items.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Produtos</Text>
-          <View>
-            <View style={styles.thRow}>
-              <Text style={[styles.th, { width: "32%" }]}>Produto</Text>
-              <Text style={[styles.th, { width: "18%" }]}>Registro MS</Text>
-              <Text style={[styles.th, { width: "20%" }]}>Grupo Químico</Text>
-              <Text style={[styles.th, { width: "30%" }]}>
-                Antídoto / Telefone
-              </Text>
-            </View>
-            {items.map((it, i) => (
-              <View key={i} style={styles.tdRow}>
-                <View style={{ width: "32%" }}>
-                  <Text style={styles.td}>{it?.product || "–"}</Text>
-                  {it?.composition && (
-                    <Text style={styles.tdNotes}>
-                      Composição: {it.composition}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.td, { width: "18%" }]}>
-                  {it?.registration_ms || "–"}
-                </Text>
-                <Text style={[styles.td, { width: "20%" }]}>
-                  {it?.group_chemical || "–"}
-                </Text>
-                <View style={{ width: "30%" }}>
-                  <Text style={styles.td}>
-                    {it?.antidote ||
-                      "Anti-histamínicos e tratamento sintomático"}
-                  </Text>
-                  {it?.emergency_phone && (
-                    <Text style={styles.tdNotes}>
-                      Emergência: {it.emergency_phone}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
+      {items.length > 0 ? (
+        <View style={{ marginTop: 6 }}>
+          <View style={S.thead}>
+            <Text style={[S.th, { width: "34%" }]}>Produto</Text>
+            <Text style={[S.th, { width: "18%" }]}>Registro MS</Text>
+            <Text style={[S.th, { width: "18%" }]}>Grupo Químico</Text>
+            <Text style={[S.th, { width: "30%" }]}>Antídoto / Telefone</Text>
           </View>
-        </>
-      )}
+          {items.map((it, i) => (
+            <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
+              <View style={{ width: "34%", paddingHorizontal: 4 }}>
+                <Text
+                  style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
+                >
+                  {it?.product || "–"}
+                </Text>
+                {it?.composition ? (
+                  <Text style={S.tdNotes}>Composição: {it.composition}</Text>
+                ) : null}
+              </View>
+              <Text style={[S.td, { width: "18%" }]}>
+                {it?.registration_ms || "–"}
+              </Text>
+              <Text style={[S.td, { width: "18%" }]}>
+                {it?.group_chemical || "–"}
+              </Text>
+              <View style={{ width: "30%" }}>
+                <Text style={S.td}>
+                  {it?.antidote || "Tratamento sintomático"}
+                </Text>
+                {it?.emergency_phone ? (
+                  <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
+                ) : null}
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
-      {/* Observação de validade */}
-      <Text style={{ fontSize: 9, color: COLORS.gray[700], marginTop: 8 }}>
+      <Text style={{ fontSize: 9, color: THEME.mute, marginTop: 6 }}>
         OBS: Este certificado tem validade de{" "}
-        {String((validityMonths / 12).toFixed(0))} ano(s) (
-        {formatDate(validUntil)}).
+        {String((validityMonths / 12).toFixed(0))} ano(s) ({fmtDate(validUntil)}
+        ).
       </Text>
-
-      {/* Local e data */}
-      <Text style={{ fontSize: 11, textAlign: "center", marginTop: 12 }}>
+      <Text style={{ fontSize: 11, textAlign: "center", marginTop: 10 }}>
         {issueCity}
         {issueCity ? ", " : ""}
-        {formatDate(data?.order?.scheduled_at)}
+        {fmtDate(data?.order?.scheduled_at)}
       </Text>
 
-      {/* Inspeções (4 colunas) */}
-      {inspections.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Inspeções</Text>
-          <View style={styles.inspRow}>
-            {inspections.slice(0, 4).map((iso, i) => (
-              <View
-                key={i}
-                style={[styles.inspCell, i > 0 ? styles.inspGap : undefined]}
+      {inspections.length > 0 ? (
+        <View style={{ flexDirection: "row", marginTop: 8 }}>
+          {inspections.slice(0, 4).map((iso, i) => (
+            <View
+              key={i}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                borderRadius: 8,
+                padding: 8,
+                alignItems: "center",
+                marginLeft: i ? 6 : 0,
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: 700, marginBottom: 12 }}>
+                {fmtDate(iso)}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 9,
+                  color: THEME.mute,
+                  marginTop: 18,
+                  borderTopWidth: 1,
+                  borderTopColor: THEME.border,
+                  width: "100%",
+                  textAlign: "center",
+                  paddingTop: 4,
+                }}
               >
-                <Text style={styles.inspDate}>{formatDate(iso)}</Text>
-                <Text style={styles.inspSign}>Assinatura</Text>
-              </View>
-            ))}
-          </View>
-        </>
-      )}
+                Assinatura
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
-      {/* Assinaturas */}
-      <View style={styles.sigs}>
-        <View style={styles.sigBox}>
-          <Text style={styles.sigTitle}>RESPONSÁVEL TÉCNICO</Text>
-          <Text style={styles.sigLine}>
+      <View style={{ flexDirection: "row", marginTop: 12 }}>
+        <View style={[S.sigBox, { marginRight: 12 }]}>
+          <Text style={S.sigTitle}>RESPONSÁVEL TÉCNICO</Text>
+          <Text style={S.sigLine}>
             {COMPANY_DATA.technical_responsible.name}
           </Text>
-          <Text style={styles.sigSub}>
+          <Text style={S.sigSub}>
             {COMPANY_DATA.technical_responsible.title} —{" "}
             {COMPANY_DATA.technical_responsible.registry}
           </Text>
         </View>
-        <View style={[styles.sigBox, styles.sigGap]}>
-          <Text style={styles.sigTitle}>INSECTA DEDETIZADORA LTDA</Text>
-          <Text style={styles.sigLine}>{COMPANY_DATA.applicator.name}</Text>
-          <Text style={styles.sigSub}>
-            CNPJ: {COMPANY_DATA.applicator.cnpj}
-          </Text>
+        <View style={S.sigBox}>
+          <Text style={S.sigTitle}>{COMPANY_DATA.name.toUpperCase()}</Text>
+          <Text style={S.sigLine}>{COMPANY_DATA.applicator.name}</Text>
+          <Text style={S.sigSub}>CNPJ: {COMPANY_DATA.applicator.cnpj}</Text>
         </View>
       </View>
 
-      {/* Licença ao centro */}
-      <View style={styles.footerCenter}>
-        <Text style={styles.license}>{COMPANY_DATA.license}</Text>
-        <Text style={{ fontSize: 8, color: COLORS.gray[600], marginTop: 4 }}>
+      <View style={{ marginTop: 12, alignItems: "center" }}>
+        <Text style={{ fontSize: 11, fontWeight: 700 }}>
+          {COMPANY_DATA.license}
+        </Text>
+        <Text style={{ fontSize: 8, color: THEME.mute, marginTop: 4 }}>
           Gerado em{" "}
-          {formatDateTime(data?.generated_at || new Date().toISOString())}
+          {fmtDateTime(data?.generated_at || new Date().toISOString())}
         </Text>
       </View>
     </Page>
@@ -1039,21 +845,10 @@ const ServiceOrderDocument: React.FC<{
   includeCertificate?: boolean;
 }> = ({ data, copies = 2, includeCertificate = false }) => {
   const pages: React.ReactNode[] = [];
-
-  for (let i = 1; i <= copies; i++) {
-    pages.push(
-      <ServiceOrderPage
-        key={`via-${i}`}
-        data={data}
-        viaIndex={i}
-        isLastPage={i === copies && !includeCertificate}
-      />
-    );
-  }
-
-  if (includeCertificate) {
+  for (let i = 1; i <= copies; i++)
+    pages.push(<ServiceOrderPage key={`via-${i}`} data={data} viaIndex={i} />);
+  if (includeCertificate)
     pages.push(<CertificatePage key="certificate" data={data} />);
-  }
 
   return (
     <Document
@@ -1072,43 +867,33 @@ export const downloadServiceOrderPdf = async (
   options: { copies?: number; includeCertificate?: boolean } = {}
 ) => {
   const { copies = 2, includeCertificate = false } = options;
-
-  const enrichedData: PrintableData = {
+  const enriched: PrintableData = {
     ...data,
     generated_at: data.generated_at || new Date().toISOString(),
   };
-
   const blob = await pdf(
     <ServiceOrderDocument
-      data={enrichedData}
+      data={enriched}
       copies={copies}
       includeCertificate={includeCertificate}
     />
   ).toBlob();
-
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-
+  const a = document.createElement("a");
+  a.href = url;
   const osCode = safeFileName(data?.order?.public_code);
-  const clientName = safeFileName(data?.client?.name);
-  const fileName = `OS_${osCode}${clientName ? `_${clientName}` : ""}.pdf`;
-
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  const client = safeFileName(data?.client?.name);
+  a.download = `OS_${osCode || ""}${client ? `_${client}` : ""}.pdf`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 };
 
 /* ───────────────── HOOK ───────────────── */
-export const useServiceOrderPDF = () => {
-  const generatePDF = (
+export const useServiceOrderPDF = () => ({
+  generatePDF: (
     data: PrintableData,
     options?: { copies?: number; includeCertificate?: boolean }
-  ) => downloadServiceOrderPdf(data, options);
-
-  return { generatePDF };
-};
+  ) => downloadServiceOrderPdf(data, options),
+});
 
 export default ServiceOrderDocument;
