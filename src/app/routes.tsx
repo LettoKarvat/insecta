@@ -1,4 +1,4 @@
-// src/routes/index.tsx (ou onde ficam suas rotas)
+// src/routes/index.tsx
 import {
   createBrowserRouter,
   RouterProvider,
@@ -18,10 +18,10 @@ import ServiceOrderEditPage from "@/pages/service-orders/service-order-edit";
 import { NewServiceOrder } from "@/pages/service-orders/new-service-order";
 import { Calendar } from "@/pages/calendar/calendar";
 import { Settings } from "@/pages/settings/settings";
-import FAESFormPage from "@/pages/faes/faesFormPage";
 
-// 👇 IMPORTES NOVOS
-import FAESListPage from "@/pages/faes/faeslistPage";
+// ✅ IMPORTS FAES com casing consistente
+import FAESFormPage from "@/pages/faes/FAESFormPage";
+import FAESListPage from "@/pages/faes/FAESListPage";
 import FAESDetailPage from "@/pages/faes/FAESDetailPage";
 
 function RouteErrorBoundary() {
@@ -58,10 +58,10 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
 
-      // 👇 ROTAS FAES
+      // FAES
       { path: "faes", element: <FAESListPage /> }, // lista
       { path: "faes/nova", element: <FAESFormPage /> }, // novo formulário
-      { path: "faes/:id", element: <FAESDetailPage /> }, // detalhe/visualização
+      { path: "faes/:id", element: <FAESDetailPage /> }, // detalhe
 
       { path: "clientes", element: <Clients /> },
       { path: "clientes/:id", element: <ClientDetails /> },
