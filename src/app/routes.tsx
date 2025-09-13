@@ -19,10 +19,10 @@ import { NewServiceOrder } from "@/pages/service-orders/new-service-order";
 import { Calendar } from "@/pages/calendar/calendar";
 import { Settings } from "@/pages/settings/settings";
 
-// ✅ IMPORTS FAES com casing consistente
-import FAESFormPage from "@/pages/faes/faesFormPage";
-import FAESListPage from "@/pages/faes/faeslistPage";
-import FAESDetailPage from "@/pages/faes/faesDetailPage";
+// ✅ IMPORTS FAES com casing consistente (PascalCase)
+import FAESFormPage from "@/pages/faes/FAESFormPage";
+import FAESListPage from "@/pages/faes/FAESListPage";
+import FAESDetailPage from "@/pages/faes/FAESDetailPage";
 
 function RouteErrorBoundary() {
   const err = useRouteError();
@@ -59,9 +59,9 @@ const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
 
       // FAES
-      { path: "faes", element: <FAESListPage /> }, // lista
-      { path: "faes/nova", element: <FAESFormPage /> }, // novo formulário
-      { path: "faes/:id", element: <FAESDetailPage /> }, // detalhe
+      { path: "faes", element: <FAESListPage /> },
+      { path: "faes/nova", element: <FAESFormPage /> },
+      { path: "faes/:id", element: <FAESDetailPage /> },
 
       { path: "clientes", element: <Clients /> },
       { path: "clientes/:id", element: <ClientDetails /> },
