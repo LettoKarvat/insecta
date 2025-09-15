@@ -66,7 +66,7 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  // Garante caminho relativo
+  // Garante caminho relativos
   if (config.url && !config.url.startsWith("/")) config.url = `/${config.url}`;
 
   // Headers base
