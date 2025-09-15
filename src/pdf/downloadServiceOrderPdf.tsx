@@ -363,16 +363,21 @@ const S = StyleSheet.create({
     borderLeftColor: THEME.primary,
     marginTop: 6,
   },
-  sigs: { flexDirection: "row", marginTop: 16 },
+  sigs: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 16,
+  },
   sigBox: {
     flex: 1,
+    minWidth: "30%",
     borderWidth: 1,
     borderColor: THEME.border,
     borderRadius: 8,
     padding: 12,
     backgroundColor: THEME.bgAlt,
   },
-  sigGap: { marginLeft: 12 },
+  sigGap: { marginLeft: 12, marginTop: 0 },
   sigTitle: {
     fontSize: 9,
     fontWeight: 700,
@@ -383,7 +388,6 @@ const S = StyleSheet.create({
   },
   sigImg: { width: "100%", height: 40, marginBottom: 10 },
   sigName: { fontSize: 9, textAlign: "center", fontWeight: 700 },
-  sigSub: { fontSize: 8, textAlign: "center", color: THEME.mute, marginTop: 2 },
   sigLine: {
     borderTopWidth: 1,
     borderTopColor: THEME.border,
@@ -500,6 +504,15 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
     .join(" / ");
   const cityUfCep = [cityUF, data?.client?.zip].filter(Boolean).join(" • ");
   const cityLabel = data?.client?.uf ? "Cidade/UF • CEP" : "Cidade • CEP";
+
+  // Dados para assinaturas
+  const tecnRespName =
+    data?.technicians?.[0]?.name || COMPANY_DATA.applicator.name; // Darlan (padrão)
+  const tecnRespSign = data?.technicians?.[0]?.signature_url || undefined;
+
+  const respTecnicoName =
+    data?.technicians?.[1]?.name || COMPANY_DATA.technical_responsible.name; // Filipe (padrão)
+  const respTecnicoSign = data?.technicians?.[1]?.signature_url || undefined;
 
   return (
     <Page size="A4" style={S.page}>
@@ -665,29 +678,42 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
       ) : null}
 
       {/* Assinaturas (OS) */}
-      <View style={S.sigs} wrap={false}>
+      <View style={S.sigs}>
+        {/* TÉCNICO RESPONSÁVEL (Darlan) */}
         <View style={S.sigBox}>
           <Text style={S.sigTitle}>Técnico Responsável</Text>
-          {data?.technicians?.[0]?.signature_url ? (
-            <Image src={data.technicians[0].signature_url!} style={S.sigImg} />
+          {tecnRespSign ? <Image src={tecnRespSign} style={S.sigImg} /> : null}
+          <Text style={S.sigName}>{tecnRespName}</Text>
+          {!tecnRespSign ? <Text style={S.sigLine}> assinatura </Text> : null}
+        </View>
+
+        {/* RESPONSÁVEL TÉCNICO (Filipe) */}
+        <View style={[S.sigBox, S.sigGap]}>
+          <Text style={S.sigTitle}>Responsável Técnico</Text>
+          {respTecnicoSign ? (
+            <Image src={respTecnicoSign} style={S.sigImg} />
           ) : null}
-          <Text style={S.sigName}>
-            {data?.technicians?.[0]?.name ||
-              COMPANY_DATA.technical_responsible.name}
-          </Text>
-          <Text style={S.sigSub}>
-            {data?.technicians?.[0]?.registry ||
-              COMPANY_DATA.technical_responsible.registry}
-          </Text>
-          {!data?.technicians?.[0]?.signature_url ? (
+          <Text style={S.sigName}>{respTecnicoName}</Text>
+          {!respTecnicoSign ? (
             <Text style={S.sigLine}> assinatura </Text>
           ) : null}
         </View>
+
+        {/* CLIENTE */}
         <View style={[S.sigBox, S.sigGap]}>
           <Text style={S.sigTitle}>Cliente</Text>
           <Text style={S.sigLine}>{data?.client_signature?.name || " "}</Text>
           {data?.client_signature?.cpf ? (
-            <Text style={S.sigSub}>CPF: {data.client_signature.cpf}</Text>
+            <Text
+              style={{
+                fontSize: 8,
+                textAlign: "center",
+                color: THEME.mute,
+                marginTop: 2,
+              }}
+            >
+              CPF: {data.client_signature.cpf}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -765,6 +791,15 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
     data.certificate?.custom_message?.trim() ||
     data.certificate?.execution_note?.trim() ||
     "";
+
+  // Dados para assinaturas no certificado
+  const tecnRespName =
+    data?.technicians?.[0]?.name || COMPANY_DATA.applicator.name; // Darlan
+  const tecnRespSign = data?.technicians?.[0]?.signature_url || undefined;
+
+  const respTecnicoName =
+    data?.technicians?.[1]?.name || COMPANY_DATA.technical_responsible.name; // Filipe
+  const respTecnicoSign = data?.technicians?.[1]?.signature_url || undefined;
 
   return (
     <Page size="A4" style={S.page}>
@@ -872,6 +907,27 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
           })}
         </View>
       ) : null}
+
+      {/* Assinaturas no Certificado (sem CREA) */}
+      <Text style={S.sectionTitle}>Responsáveis</Text>
+      <View style={S.sigs}>
+        <View style={S.sigBox}>
+          <Text style={S.sigTitle}>Técnico Responsável</Text>
+          {tecnRespSign ? <Image src={tecnRespSign} style={S.sigImg} /> : null}
+          <Text style={S.sigName}>{tecnRespName}</Text>
+          {!tecnRespSign ? <Text style={S.sigLine}> assinatura </Text> : null}
+        </View>
+        <View style={[S.sigBox, S.sigGap]}>
+          <Text style={S.sigTitle}>Responsável Técnico</Text>
+          {respTecnicoSign ? (
+            <Image src={respTecnicoSign} style={S.sigImg} />
+          ) : null}
+          <Text style={S.sigName}>{respTecnicoName}</Text>
+          {!respTecnicoSign ? (
+            <Text style={S.sigLine}> assinatura </Text>
+          ) : null}
+        </View>
+      </View>
 
       <View style={{ marginTop: 12, alignItems: "center" }}>
         <Text style={{ fontSize: 11, fontWeight: 700 }}>

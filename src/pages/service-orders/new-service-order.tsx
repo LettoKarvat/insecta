@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useState } from "react";
 import {
   useFieldArray,
   useForm,
@@ -26,9 +27,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TechnicianQuickForm } from "@/components/forms/technician-quick-form";
-import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import type { Product } from "@/types/api";
+
+/* ───────── util leve p/ classes ───────── */
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+const invalidCls =
+  "border-destructive ring-1 ring-destructive/50 focus-visible:ring-destructive";
 
 /* ───────── helpers locais ───────── */
 const addMonths = (base: string | Date | undefined, months = 0) => {
@@ -113,6 +120,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+/* ───────── componente ───────── */
 export function NewServiceOrder() {
   const [sp] = useSearchParams();
   const prefillStart = sp.get("start") || "";
@@ -163,6 +171,7 @@ export function NewServiceOrder() {
         execution_note: "",
       },
     },
+    mode: "onSubmit",
   });
 
   const {
@@ -274,43 +283,52 @@ export function NewServiceOrder() {
   };
 
   const onInvalid = () => {
-    toast.error("Confira os campos obrigatórios destacados");
+    toast.error("Há campos obrigatórios sem preencher.");
+    // tenta focar o primeiro input inválido
+    const el =
+      document.querySelector('[aria-invalid="true"]') ||
+      document.querySelector('[data-invalid="true"]');
+    if (el && "focus" in el) {
+      (el as HTMLElement).focus();
+      (el as HTMLElement).scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
   };
 
-  const handleCreateTechnician = (payload: {
-    name: string;
-    email?: string;
-    phone?: string;
-  }) => {
-    createTech.mutate(payload, {
-      onSuccess: () => {
-        toast.success("Técnico criado");
-        setTechModal(false);
-        setTechRows((prev) => (prev.length === 0 ? [""] : prev));
-      },
-      onError: (err: any) => {
-        const msg =
-          err?.response?.data?.detail ||
-          err?.message ||
-          "Erro ao criar técnico";
-        toast.error(String(msg));
-      },
-    });
-  };
+  const saving = (createOS as any).isPending || (createOS as any).isLoading;
 
   return (
     <PageShell
       title="Nova Ordem de Serviço"
       description="Inclua várias pragas e múltiplos produtos por praga"
     >
+      {/* Resumo de erros (topo) */}
+      {Object.keys(errors || {}).length > 0 && (
+        <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          <p className="font-medium text-destructive">Há campos com erro.</p>
+          <p className="text-muted-foreground">
+            Preencha os campos destacados. Você pode rolar até eles ou usar as
+            mensagens abaixo de cada campo.
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         {/* Cabeçalho / dados gerais */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-2">
-            <Label>Cliente *</Label>
+            <Label>
+              Cliente <span className="text-destructive">*</span>
+            </Label>
             <select
-              className="border rounded-md h-9 px-2 w-full"
+              className={cx(
+                "border rounded-md h-9 px-2 w-full bg-background",
+                errors.client_id && invalidCls
+              )}
               {...register("client_id")}
+              aria-invalid={!!errors.client_id}
             >
               <option value="">Selecione...</option>
               {(clients?.items || []).map((c) => (
@@ -320,7 +338,7 @@ export function NewServiceOrder() {
               ))}
             </select>
             {errors.client_id && (
-              <p className="text-sm text-destructive">
+              <p className="text-sm text-destructive mt-1">
                 {String(errors.client_id.message)}
               </p>
             )}
@@ -366,9 +384,12 @@ export function NewServiceOrder() {
                 currentId > 0 &&
                 [...selectedIds].filter((id) => id === currentId).length > 1;
               return (
-                <div key={idx} className="flex items-center gap-2">
+                <div
+                  key={idx}
+                  className="flex flex-wrap md:flex-nowrap items-center gap-2"
+                >
                   <select
-                    className="border rounded-md h-9 px-2 w-full md:max-w-md"
+                    className="border rounded-md h-9 px-2 w-full md:max-w-md bg-background"
                     value={val}
                     onChange={(e) => changeTechRow(idx, e.target.value)}
                   >
@@ -402,7 +423,9 @@ export function NewServiceOrder() {
         {/* Pragas / Produtos */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium">Pragas</h3>
+            <h3 className="font-medium">
+              Pragas <span className="text-destructive">*</span>
+            </h3>
             <Button
               type="button"
               variant="outline"
@@ -426,16 +449,26 @@ export function NewServiceOrder() {
           </div>
 
           {pestFields.map((pField, pIndex) => (
-            <div key={pField.id} className="border rounded-md p-3 space-y-3">
+            <div
+              key={pField.id}
+              className={cx(
+                "border rounded-md p-3 space-y-3",
+                errors.pragas?.[pIndex] && "border-destructive/50"
+              )}
+            >
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <Label>Praga *</Label>
+                  <Label>
+                    Praga <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     placeholder="Ex.: Barata, Formiga, etc."
                     {...register(`pragas.${pIndex}.praga` as const)}
+                    aria-invalid={!!errors.pragas?.[pIndex]?.praga}
+                    className={cx(errors.pragas?.[pIndex]?.praga && invalidCls)}
                   />
                   {errors.pragas?.[pIndex]?.praga && (
-                    <p className="text-sm text-destructive">
+                    <p className="text-sm text-destructive mt-1">
                       {String(errors.pragas?.[pIndex]?.praga?.message)}
                     </p>
                   )}
@@ -480,9 +513,13 @@ export function NewServiceOrder() {
                 max={60}
                 step={1}
                 {...register("certificate.validity_months")}
+                aria-invalid={!!errors.certificate?.validity_months}
+                className={cx(
+                  errors.certificate?.validity_months && invalidCls
+                )}
               />
               {errors.certificate?.validity_months && (
-                <p className="text-sm text-destructive">
+                <p className="text-sm text-destructive mt-1">
                   {String(errors.certificate?.validity_months.message)}
                 </p>
               )}
@@ -490,11 +527,7 @@ export function NewServiceOrder() {
 
             <div>
               <Label>Válido até (manual)</Label>
-              <Input
-                type="date"
-                {...register("certificate.valid_until")}
-                title="Opcional: se preencher, sobrescreve a validade calculada"
-              />
+              <Input type="date" {...register("certificate.valid_until")} />
             </div>
 
             <div>
@@ -505,9 +538,11 @@ export function NewServiceOrder() {
                 max={30}
                 step={1}
                 {...register("certificate.execution_days")}
+                aria-invalid={!!errors.certificate?.execution_days}
+                className={cx(errors.certificate?.execution_days && invalidCls)}
               />
               {errors.certificate?.execution_days && (
-                <p className="text-sm text-destructive">
+                <p className="text-sm text-destructive mt-1">
                   {String(errors.certificate?.execution_days.message)}
                 </p>
               )}
@@ -547,15 +582,8 @@ export function NewServiceOrder() {
 
         {/* Salvar */}
         <div className="flex justify-end">
-          <Button
-            type="submit"
-            disabled={
-              (createOS as any).isPending ?? (createOS as any).isLoading
-            }
-          >
-            {(createOS as any).isPending ?? (createOS as any).isLoading
-              ? "Salvando..."
-              : "Salvar OS"}
+          <Button type="submit" disabled={!!saving}>
+            {saving ? "Salvando..." : "Salvar OS"}
           </Button>
         </div>
       </form>
@@ -575,6 +603,7 @@ export function NewServiceOrder() {
   );
 }
 
+/* ───────── sub-componente: linhas de produtos ───────── */
 function PestGroupRow({
   index,
   control,
@@ -608,7 +637,9 @@ function PestGroupRow({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">Produtos / Aplicações</h4>
+        <h4 className="text-sm font-medium">
+          Produtos / Aplicações <span className="text-destructive">*</span>
+        </h4>
         <Button
           type="button"
           variant="outline"
@@ -665,11 +696,17 @@ function PestGroupRow({
         return (
           <div key={f.id} className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="md:col-span-2">
-              <Label>Produto *</Label>
+              <Label>
+                Produto <span className="text-destructive">*</span>
+              </Label>
               <select
-                className="border rounded-md h-9 px-2 w-full"
+                className={cx(
+                  "border rounded-md h-9 px-2 w-full bg-background",
+                  itemErrors?.[iIndex]?.product_id && invalidCls
+                )}
                 {...reg}
                 onChange={handleProductChange}
+                aria-invalid={!!itemErrors?.[iIndex]?.product_id}
               >
                 <option value={0}>Selecione...</option>
                 {products.map((p) => (
@@ -679,7 +716,7 @@ function PestGroupRow({
                 ))}
               </select>
               {itemErrors?.[iIndex]?.product_id && (
-                <p className="text-sm text-destructive">
+                <p className="text-sm text-destructive mt-1">
                   {String(itemErrors?.[iIndex]?.product_id?.message)}
                 </p>
               )}
@@ -724,33 +761,48 @@ function PestGroupRow({
             </div>
 
             <div>
-              <Label>Aplicação *</Label>
+              <Label>
+                Aplicação <span className="text-destructive">*</span>
+              </Label>
               <Input
                 placeholder="Ex.: Pulverização"
                 {...register(
                   `pragas.${index}.itens.${iIndex}.aplicacao` as const
                 )}
+                aria-invalid={!!itemErrors?.[iIndex]?.aplicacao}
+                className={cx(itemErrors?.[iIndex]?.aplicacao && invalidCls)}
               />
               {itemErrors?.[iIndex]?.aplicacao && (
-                <p className="text-sm text-destructive">
+                <p className="text-sm text-destructive mt-1">
                   {String(itemErrors?.[iIndex]?.aplicacao?.message)}
                 </p>
               )}
             </div>
 
             <div>
-              <Label>Diluição *</Label>
-              <Input placeholder="Ex.: 20ml/L" {...register(diluicaoPath)} />
+              <Label>
+                Diluição <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                placeholder="Ex.: 20ml/L"
+                {...register(diluicaoPath)}
+                aria-invalid={!!itemErrors?.[iIndex]?.diluicao}
+                className={cx(itemErrors?.[iIndex]?.diluicao && invalidCls)}
+              />
               {itemErrors?.[iIndex]?.diluicao && (
-                <p className="text-sm text-destructive">
+                <p className="text-sm text-destructive mt-1">
                   {String(itemErrors?.[iIndex]?.diluicao?.message)}
                 </p>
               )}
             </div>
 
-            <div className="flex gap-2">
-              <div>
-                <Label>Qtd *</Label>
+            {/* Bloco final responsivo: Qtd + Garantia + Remover */}
+            <div className="flex flex-wrap md:flex-nowrap gap-2">
+              {/* Qtd — reserva espaço fixo para não sumir */}
+              <div className="w-[96px] shrink-0">
+                <Label>
+                  Qtd <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="number"
                   min="1"
@@ -758,33 +810,42 @@ function PestGroupRow({
                   {...register(
                     `pragas.${index}.itens.${iIndex}.quantidade` as const
                   )}
+                  aria-invalid={!!itemErrors?.[iIndex]?.quantidade}
+                  className={cx(itemErrors?.[iIndex]?.quantidade && invalidCls)}
                 />
                 {itemErrors?.[iIndex]?.quantidade && (
-                  <p className="text-sm text-destructive">
+                  <p className="text-sm text-destructive mt-1">
                     {String(itemErrors?.[iIndex]?.quantidade?.message)}
                   </p>
                 )}
               </div>
 
-              <div className="flex-1">
-                <Label>Garantia *</Label>
+              {/* Garantia — ocupa o restante com limite mínimo */}
+              <div className="min-w-[160px] flex-1">
+                <Label>
+                  Garantia <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   placeholder="Ex.: 90d"
                   {...register(
                     `pragas.${index}.itens.${iIndex}.garantia` as const
                   )}
+                  aria-invalid={!!itemErrors?.[iIndex]?.garantia}
+                  className={cx(itemErrors?.[iIndex]?.garantia && invalidCls)}
                 />
                 {itemErrors?.[iIndex]?.garantia && (
-                  <p className="text-sm text-destructive">
+                  <p className="text-sm text-destructive mt-1">
                     {String(itemErrors?.[iIndex]?.garantia?.message)}
                   </p>
                 )}
               </div>
 
-              <div className="flex items-end">
+              {/* Botão — quebra linha no mobile */}
+              <div className="basis-full md:basis-auto flex items-end">
                 <Button
                   type="button"
                   variant="destructive"
+                  className="w-full md:w-auto"
                   onClick={() => remove(iIndex)}
                 >
                   Remover
