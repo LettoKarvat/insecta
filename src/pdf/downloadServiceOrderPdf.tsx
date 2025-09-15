@@ -367,6 +367,7 @@ const S = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     marginTop: 16,
+    gap: 12,
   },
   sigBox: {
     flex: 1,
@@ -377,7 +378,6 @@ const S = StyleSheet.create({
     padding: 12,
     backgroundColor: THEME.bgAlt,
   },
-  sigGap: { marginLeft: 12, marginTop: 0 },
   sigTitle: {
     fontSize: 9,
     fontWeight: 700,
@@ -388,6 +388,7 @@ const S = StyleSheet.create({
   },
   sigImg: { width: "100%", height: 40, marginBottom: 10 },
   sigName: { fontSize: 9, textAlign: "center", fontWeight: 700 },
+  sigSub: { fontSize: 8, textAlign: "center", color: THEME.mute, marginTop: 2 },
   sigLine: {
     borderTopWidth: 1,
     borderTopColor: THEME.border,
@@ -510,8 +511,10 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
     data?.technicians?.[0]?.name || COMPANY_DATA.applicator.name; // Darlan (padrão)
   const tecnRespSign = data?.technicians?.[0]?.signature_url || undefined;
 
-  const respTecnicoName =
-    data?.technicians?.[1]?.name || COMPANY_DATA.technical_responsible.name; // Filipe (padrão)
+  // Filipe sempre como Responsável Técnico (nome fixo) + título/CREA embaixo
+  const respTecnicoName = COMPANY_DATA.technical_responsible.name;
+  const respTecnicoTitle = COMPANY_DATA.technical_responsible.title;
+  const respTecnicoRegistry = COMPANY_DATA.technical_responsible.registry;
   const respTecnicoSign = data?.technicians?.[1]?.signature_url || undefined;
 
   return (
@@ -679,7 +682,7 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
 
       {/* Assinaturas (OS) */}
       <View style={S.sigs}>
-        {/* TÉCNICO RESPONSÁVEL (Darlan) */}
+        {/* TÉCNICO RESPONSÁVEL (Darlan) — sem CREA */}
         <View style={S.sigBox}>
           <Text style={S.sigTitle}>Técnico Responsável</Text>
           {tecnRespSign ? <Image src={tecnRespSign} style={S.sigImg} /> : null}
@@ -687,33 +690,26 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
           {!tecnRespSign ? <Text style={S.sigLine}> assinatura </Text> : null}
         </View>
 
-        {/* RESPONSÁVEL TÉCNICO (Filipe) */}
-        <View style={[S.sigBox, S.sigGap]}>
+        {/* RESPONSÁVEL TÉCNICO (Filipe) — com título e CREA abaixo */}
+        <View style={S.sigBox}>
           <Text style={S.sigTitle}>Responsável Técnico</Text>
           {respTecnicoSign ? (
             <Image src={respTecnicoSign} style={S.sigImg} />
           ) : null}
           <Text style={S.sigName}>{respTecnicoName}</Text>
+          <Text style={S.sigSub}>{respTecnicoTitle}</Text>
+          <Text style={S.sigSub}>{respTecnicoRegistry}</Text>
           {!respTecnicoSign ? (
             <Text style={S.sigLine}> assinatura </Text>
           ) : null}
         </View>
 
         {/* CLIENTE */}
-        <View style={[S.sigBox, S.sigGap]}>
+        <View style={S.sigBox}>
           <Text style={S.sigTitle}>Cliente</Text>
           <Text style={S.sigLine}>{data?.client_signature?.name || " "}</Text>
           {data?.client_signature?.cpf ? (
-            <Text
-              style={{
-                fontSize: 8,
-                textAlign: "center",
-                color: THEME.mute,
-                marginTop: 2,
-              }}
-            >
-              CPF: {data.client_signature.cpf}
-            </Text>
+            <Text style={S.sigSub}>CPF: {data.client_signature.cpf}</Text>
           ) : null}
         </View>
       </View>
@@ -786,19 +782,21 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
 
   const logoSrc = resolveLogo();
 
-  // ⬇️ Somente a mensagem digitada (custom_message → execution_note). Sem padrão.
+  // Mensagem custom
   const message =
     data.certificate?.custom_message?.trim() ||
     data.certificate?.execution_note?.trim() ||
     "";
 
-  // Dados para assinaturas no certificado
+  // Assinaturas no certificado
   const tecnRespName =
     data?.technicians?.[0]?.name || COMPANY_DATA.applicator.name; // Darlan
   const tecnRespSign = data?.technicians?.[0]?.signature_url || undefined;
 
-  const respTecnicoName =
-    data?.technicians?.[1]?.name || COMPANY_DATA.technical_responsible.name; // Filipe
+  // Filipe sempre com título + CREA
+  const respTecnicoName = COMPANY_DATA.technical_responsible.name;
+  const respTecnicoTitle = COMPANY_DATA.technical_responsible.title;
+  const respTecnicoRegistry = COMPANY_DATA.technical_responsible.registry;
   const respTecnicoSign = data?.technicians?.[1]?.signature_url || undefined;
 
   return (
@@ -873,56 +871,57 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
             <Text style={[S.th, { width: "18%" }]}>Grupo Químico</Text>
             <Text style={[S.th, { width: "30%" }]}>Antídoto / Telefone</Text>
           </View>
-          {items.map((it, i) => {
-            const { u, label } = resolveUrgency(it);
-            return (
-              <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
-                <View style={{ width: "34%", paddingHorizontal: 4 }}>
-                  <Text
-                    style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
-                  >
-                    {it?.product || "–"}
-                  </Text>
-                  {it?.composition ? (
-                    <Text style={S.tdNotes}>Composição: {it.composition}</Text>
-                  ) : null}
-                  {/* ⬇️ URGÊNCIA (nota abaixo do produto) */}
-                </View>
-                <Text style={[S.td, { width: "18%" }]}>
-                  {it?.registration_ms || "–"}
+          {items.map((it, i) => (
+            <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
+              <View style={{ width: "34%", paddingHorizontal: 4 }}>
+                <Text
+                  style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
+                >
+                  {it?.product || "–"}
                 </Text>
-                <Text style={[S.td, { width: "18%" }]}>
-                  {it?.group_chemical || "–"}
-                </Text>
-                <View style={{ width: "30%" }}>
-                  <Text style={S.td}>
-                    {it?.antidote || "Tratamento sintomático"}
-                  </Text>
-                  {it?.emergency_phone ? (
-                    <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
-                  ) : null}
-                </View>
+                {it?.composition ? (
+                  <Text style={S.tdNotes}>Composição: {it.composition}</Text>
+                ) : null}
               </View>
-            );
-          })}
+              <Text style={[S.td, { width: "18%" }]}>
+                {it?.registration_ms || "–"}
+              </Text>
+              <Text style={[S.td, { width: "18%" }]}>
+                {it?.group_chemical || "–"}
+              </Text>
+              <View style={{ width: "30%" }}>
+                <Text style={S.td}>
+                  {it?.antidote || "Tratamento sintomático"}
+                </Text>
+                {it?.emergency_phone ? (
+                  <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
+                ) : null}
+              </View>
+            </View>
+          ))}
         </View>
       ) : null}
 
-      {/* Assinaturas no Certificado (sem CREA) */}
+      {/* Assinaturas no Certificado */}
       <Text style={S.sectionTitle}>Responsáveis</Text>
       <View style={S.sigs}>
+        {/* Técnico Responsável — sem CREA */}
         <View style={S.sigBox}>
           <Text style={S.sigTitle}>Técnico Responsável</Text>
           {tecnRespSign ? <Image src={tecnRespSign} style={S.sigImg} /> : null}
           <Text style={S.sigName}>{tecnRespName}</Text>
           {!tecnRespSign ? <Text style={S.sigLine}> assinatura </Text> : null}
         </View>
-        <View style={[S.sigBox, S.sigGap]}>
+
+        {/* Responsável Técnico — com título + CREA abaixo */}
+        <View style={S.sigBox}>
           <Text style={S.sigTitle}>Responsável Técnico</Text>
           {respTecnicoSign ? (
             <Image src={respTecnicoSign} style={S.sigImg} />
           ) : null}
           <Text style={S.sigName}>{respTecnicoName}</Text>
+          <Text style={S.sigSub}>{respTecnicoTitle}</Text>
+          <Text style={S.sigSub}>{respTecnicoRegistry}</Text>
           {!respTecnicoSign ? (
             <Text style={S.sigLine}> assinatura </Text>
           ) : null}
