@@ -18,7 +18,7 @@ const navigation = [
   { name: "Estoque", href: "/produtos", icon: Package },
   { name: "Ordens de Serviço", href: "/ordens-servico", icon: ClipboardList },
   { name: "Agenda", href: "/agenda", icon: Calendar },
-  { name: "Configurações", href: "/configuracoes", icon: Settings },
+  { name: "Pablo clique aqui", href: "/configuracoes", icon: Settings },
 
   // 👇 Agora vai para a lista
   { name: "FAES", href: "/faes", icon: FileText },

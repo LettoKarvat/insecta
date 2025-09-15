@@ -1,5 +1,6 @@
+// hooks/useServiceOrders.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../client";
+import { apiClient, formatApiError } from "../client";
 import {
   ServiceOrder,
   CreateServiceOrderRequest,
@@ -27,8 +28,9 @@ export type PrintableData = {
     email?: string | null;
     phone?: string | null;
     address?: string | null;
-    city?: string | null; // opcional (certificado)
-    zip?: string | null; // opcional (certificado)
+    city?: string | null;
+    uf?: string | null;
+    zip?: string | null;
   };
   company?: {
     name?: string;
@@ -38,6 +40,7 @@ export type PrintableData = {
     phone?: string | null;
     logo_url?: string | null;
     website?: string | null;
+    city?: string | null;
   };
   technicians?: Array<{
     name?: string;
@@ -57,25 +60,25 @@ export type PrintableData = {
     recommended_dilution?: string | null;
     toxicity_action?: string | null;
     antidote?: string | null;
-    emergency_phone?: string | null; // ⬅️ NOVO
+    emergency_phone?: string | null;
     garantia?: string | null;
   }>;
-  /** Preferências enviadas pelo back (mantido) */
   defaults?: {
     include_certificate?: boolean | null;
     copies?: string[] | null;
     template?: string | null;
   };
-  /** ⬇️ NOVO: bloco do certificado */
+  /** Bloco do certificado (o front pode usar `custom_message` localmente para o PDF) */
   certificate?: {
-    service_type?: string; // ex: "DESCUPINIZAÇÃO"
-    issue_city?: string; // ex: "Campo Alegre"
-    execution_days?: number; // ex: 5
+    service_type?: string;
+    issue_city?: string;
+    execution_days?: number;
     execution_note?: string | null;
-    validity_months?: number; // ex: 24
-    valid_until?: string | null; // ISO
-    methods?: string[]; // ["Pulverização", "Injeção em madeira", ...]
-    inspections?: string[]; // 4 datas ISO (6, 12, 18, 24 meses)
+    validity_months?: number;
+    valid_until?: string | null;
+    methods?: string[];
+    inspections?: string[];
+    custom_message?: string | null; // usado só no front/PDF
   };
   validation_url?: string | null;
   generated_at?: string | null;
@@ -148,9 +151,20 @@ const addMonths = (iso?: string | null, months = 0) => {
   const day = d.getDate();
   const target = new Date(d.getTime());
   target.setMonth(d.getMonth() + months);
-  // Ajuste simples para meses com menos dias
   if (target.getDate() < day) target.setDate(0);
   return target.toISOString();
+};
+
+/** Converte:
+ *  - "YYYY-MM-DD"           -> "YYYY-MM-DDT00:00:00"
+ *  - "YYYY-MM-DDTHH:mm"     -> "YYYY-MM-DDTHH:mm:00"
+ *  - já com segundos        -> retorna como veio
+ */
+const ensureSeconds = (dt?: string | null) => {
+  if (!dt) return dt ?? null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) return `${dt}T00:00:00`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)) return `${dt}:00`;
+  return dt;
 };
 
 /** Infere tipo de serviço pelo conjunto de pragas */
@@ -164,6 +178,47 @@ const inferServiceType = (
   if (txt.includes("cupin")) return "DESCUPINIZAÇÃO";
   if (txt.includes("broca")) return "DESCUPINIZAÇÃO";
   return "DEDETIZAÇÃO";
+};
+
+/** Normaliza/limpa o bloco certificate para enviar ao backend
+ *  ⚠️ NÃO enviamos `custom_message` (campo não suportado pelo back)
+ */
+const sanitizeCertificate = (
+  cert?: Partial<PrintableData["certificate"]> | null
+) => {
+  if (!cert || typeof cert !== "object") return undefined;
+
+  const out: any = {};
+  if (cert.service_type != null)
+    out.service_type = String(cert.service_type || "").trim() || null;
+  if (cert.issue_city != null)
+    out.issue_city = String(cert.issue_city || "").trim() || null;
+  if (cert.execution_note != null)
+    out.execution_note = String(cert.execution_note || "").trim() || null;
+
+  if (cert.execution_days != null) {
+    const n = Number(cert.execution_days);
+    if (!Number.isNaN(n)) out.execution_days = n;
+  }
+  if (cert.validity_months != null) {
+    const n = Number(cert.validity_months);
+    if (!Number.isNaN(n)) out.validity_months = n;
+  }
+
+  if (cert.valid_until != null) {
+    out.valid_until = ensureSeconds(cert.valid_until || "") || null;
+  }
+
+  if (Array.isArray(cert.methods)) {
+    out.methods = cert.methods.map((m) => String(m)).filter(Boolean);
+  }
+  if (Array.isArray(cert.inspections)) {
+    out.inspections = cert.inspections
+      .map((i) => ensureSeconds(i) || i)
+      .filter(Boolean);
+  }
+
+  return Object.keys(out).length ? out : undefined;
 };
 
 /** Mapeia possíveis shapes do /printable para o shape esperado pelos componentes PDF */
@@ -226,7 +281,6 @@ const mapPrintable = (raw: any): PrintableData => {
           garantia: ln?.garantia ?? null,
         }));
 
-  // Completa/normaliza bloco certificate se o back não enviar
   const baseISO: string | null =
     raw?.order?.scheduled_at || raw?.order?.created_at || null;
 
@@ -246,6 +300,22 @@ const mapPrintable = (raw: any): PrintableData => {
       ? Number(raw.certificate.validity_months)
       : 24;
 
+  // client explícito + overrides
+  const client = {
+    ...raw?.client,
+    city: raw?.client?.city ?? null,
+    uf: raw?.client?.uf ?? null,
+    zip: raw?.client?.zip ?? null,
+  };
+  const ovClient =
+    raw?.print_overrides?.client || raw?.overrides?.client || null;
+  if (ovClient && typeof ovClient === "object") {
+    if (ovClient.address != null) client.address = ovClient.address || null;
+    if (ovClient.city != null) client.city = ovClient.city || null;
+    if (ovClient.uf != null) client.uf = ovClient.uf || null;
+    if (ovClient.zip != null) client.zip = ovClient.zip || null;
+  }
+
   const certificate = {
     service_type:
       raw?.certificate?.service_type ??
@@ -263,6 +333,7 @@ const mapPrintable = (raw: any): PrintableData => {
     inspections:
       raw?.certificate?.inspections ??
       (baseISO ? [6, 12, 18, 24].map((m) => addMonths(baseISO, m)) : []),
+    custom_message: raw?.certificate?.custom_message ?? null, // ok para o front/PDF
   };
 
   return {
@@ -272,11 +343,7 @@ const mapPrintable = (raw: any): PrintableData => {
       status: code,
       status_text: label,
     },
-    client: {
-      ...raw?.client,
-      city: raw?.client?.city ?? null,
-      zip: raw?.client?.zip ?? null,
-    },
+    client,
     items,
     certificate,
   };
@@ -294,7 +361,13 @@ const shouldRetry = (failureCount: number, error: unknown) => {
 
 // filtro canônico p/ listagem
 const mapFilterStatus = (s?: string) =>
-  s === "DONE" ? "COMPLETED" : s === "SCHEDULED" ? "IN_PROGRESS" : s;
+  s === "DONE"
+    ? "COMPLETED"
+    : s === "SCHEDULED"
+    ? "IN_PROGRESS"
+    : s === "CONCLUDED"
+    ? "COMPLETED"
+    : s;
 
 /* ───────── LISTAGEM / DETALHE ───────── */
 export function useServiceOrders(
@@ -361,20 +434,35 @@ export function useServiceOrder(id?: number | string) {
 }
 
 /* ───────── CREATE ───────── */
+type CreateSOWithCert = CreateServiceOrderRequest & {
+  certificate?: Partial<PrintableData["certificate"]> | null;
+};
+
 export function useCreateServiceOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (
-      data: CreateServiceOrderRequest
-    ): Promise<ServiceOrder> => {
-      const res = await apiClient.post("/service-orders", data, {
+    mutationFn: async (data: CreateSOWithCert): Promise<ServiceOrder> => {
+      const payload: any = { ...data };
+      if (data?.certificate) {
+        const cert = sanitizeCertificate(data.certificate);
+        if (cert) payload.certificate = cert;
+      }
+      if (typeof (payload as any).scheduled_at === "string") {
+        payload.scheduled_at = ensureSeconds(payload.scheduled_at);
+      }
+
+      const res = await apiClient.post("/service-orders", payload, {
         headers: { "Idempotency-Key": generateIdempotencyKey() },
       });
       return res.data;
     },
     onSuccess: () => {
       toast.success("OS criada com sucesso!");
-      qc.invalidateQueries({ queryKey: ["service-orders"] });
+      const key = ["service-orders"] as const;
+      void qc.invalidateQueries({ queryKey: key });
+    },
+    onError: (e: any) => {
+      toast.error(formatApiError(e));
     },
   });
 }
@@ -416,7 +504,7 @@ export function useServiceOrderPdf() {
       return true;
     },
     retry: false,
-    onError: () => toast.error("Erro ao gerar PDF"),
+    onError: (e: any) => toast.error(formatApiError(e)),
   });
 }
 
@@ -438,6 +526,15 @@ export type UpdateServiceOrderRequest = {
   notes?: string | null;
   lines?: ServiceOrderLineUpdate[];
   technician_ids?: number[];
+  certificate?: Partial<PrintableData["certificate"]> | null; // será sanitizado (sem custom_message)
+  print_overrides?: {
+    client?: {
+      address?: string | null;
+      city?: string | null;
+      uf?: string | null;
+      zip?: string | null;
+    } | null;
+  } | null;
 };
 
 // helpers de normalização para update
@@ -447,6 +544,7 @@ const stripEnumPrefix = (s?: string) => {
 };
 const toNaiveLocalIso = (dtLocal?: string | null) => {
   if (!dtLocal) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dtLocal)) return `${dtLocal}T00:00:00`;
   const hasSeconds = /\d{2}:\d{2}:\d{2}$/.test(dtLocal);
   return hasSeconds ? dtLocal : `${dtLocal}:00`;
 };
@@ -494,6 +592,29 @@ const sanitizeUpdate = (data: UpdateServiceOrderRequest) => {
     out.technician_ids = data.technician_ids.map(Number);
   }
 
+  if (data.certificate) {
+    const cert = sanitizeCertificate(data.certificate);
+    if (cert) out.certificate = cert;
+  }
+
+  // overrides de impressão (opcional, só se preenchido)
+  if (
+    data.print_overrides?.client &&
+    typeof data.print_overrides.client === "object"
+  ) {
+    const c = data.print_overrides.client;
+    const clean: any = {};
+    if (c.address != null) clean.address = String(c.address).trim() || null;
+    if (c.city != null) clean.city = String(c.city).trim() || null;
+    if (c.uf != null)
+      clean.uf =
+        (String(c.uf).trim().toUpperCase() || null)?.slice(0, 2) || null;
+    if (c.zip != null) clean.zip = String(c.zip).trim() || null;
+    if (Object.keys(clean).length) {
+      out.print_overrides = { client: clean };
+    }
+  }
+
   return out;
 };
 
@@ -513,15 +634,14 @@ export function useUpdateServiceOrder() {
     },
     onSuccess: (_, vars) => {
       toast.success("OS atualizada!");
-      qc.invalidateQueries({ queryKey: ["service-orders"] });
-      qc.invalidateQueries({ queryKey: ["service-order", String(vars.id)] });
+      void qc.invalidateQueries({ queryKey: ["service-orders"] });
+      void qc.invalidateQueries({
+        queryKey: ["service-order", String(vars.id)],
+      });
     },
     onError: (e: any) => {
-      const msg =
-        e?.response?.data?.detail ||
-        e?.response?.data?.message ||
-        "Não foi possível salvar a OS.";
-      toast.error(msg);
+      // ✅ sempre string — evita "Objects are not valid as a React child"
+      toast.error(formatApiError(e));
     },
   });
 }
@@ -535,7 +655,10 @@ export function useDeleteServiceOrder() {
     },
     onSuccess: () => {
       toast.success("OS excluída!");
-      qc.invalidateQueries({ queryKey: ["service-orders"] });
+      void qc.invalidateQueries({ queryKey: ["service-orders"] });
+    },
+    onError: (e: any) => {
+      toast.error(formatApiError(e));
     },
   });
 }

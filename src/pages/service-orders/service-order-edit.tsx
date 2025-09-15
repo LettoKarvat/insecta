@@ -1,3 +1,4 @@
+// src/pages/service-order-edit.tsx
 import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +24,7 @@ import {
   useUpdateServiceOrder,
   useDeleteServiceOrder,
 } from "@/api/hooks/useServiceOrders";
+import { formatApiError } from "@/api/client";
 
 /* ---------------- helpers ---------------- */
 function toLocalInput(dt?: string | null) {
@@ -36,14 +38,37 @@ function toLocalInput(dt?: string | null) {
 const stripEnum = (s?: string) =>
   s ? (String(s).includes(".") ? String(s).split(".").pop()! : String(s)) : "";
 
+/** Extrai cidade/UF/CEP de um endereço BR. */
+function parseAddressBR(addr?: string) {
+  const out = { city: "", uf: "", zip: "" };
+  if (!addr) return out;
+  const cep = addr.match(/\b\d{5}-?\d{3}\b/);
+  if (cep) out.zip = cep[0];
+  const m = addr.match(/,\s*([^,]+?)\s*[-–—]\s*([A-Z]{2})\b/);
+  if (m) {
+    out.city = m[1].trim();
+    out.uf = m[2].trim().toUpperCase();
+    return out;
+  }
+  const m2 = addr.match(/,\s*([^,]+?)\s*,\s*\d{5}-?\d{3}\b/);
+  if (m2) out.city = m2[1].trim();
+  if (!out.uf) {
+    const uf = addr.match(
+      /\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/
+    );
+    if (uf) out.uf = uf[1].toUpperCase();
+  }
+  return out;
+}
+
 /* ---------------- schema ---------------- */
 const lineSchema = z.object({
-  id: z.number().int().optional(), // mantém vínculo com a linha existente
+  id: z.number().int().optional(),
   product_id: z.coerce.number().int().positive("Selecione o produto"),
   aplicacao: z.string().min(1, "Aplicação obrigatória"),
   diluicao: z.string().min(1, "Diluição obrigatória"),
   quantidade: z.coerce.number().positive("Qtd > 0"),
-  garantia: z.string().optional(), // ex.: "90d"
+  garantia: z.string().optional(),
 });
 
 const pestGroupSchema = z.object({
@@ -55,7 +80,7 @@ const pestGroupSchema = z.object({
 
 const schema = z.object({
   client_id: z.coerce.number().int().positive("Selecione um cliente"),
-  status: z.enum(["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"]), // 👈 canônico
+  status: z.enum(["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"]),
   scheduled_at: z.string().optional(),
   notes: z.string().optional(),
   technician_ids: z
@@ -63,6 +88,12 @@ const schema = z.object({
     .optional()
     .default([]),
   pragas: z.array(pestGroupSchema).min(1, "Inclua ao menos 1 praga"),
+
+  // overrides de impressão (apenas UI; não enviados ao back)
+  print_address: z.string().optional(),
+  print_city: z.string().optional(),
+  print_uf: z.string().max(2, "UF com 2 letras").optional(),
+  print_zip: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -87,8 +118,6 @@ export default function ServiceOrderEditPage() {
     reset,
     formState: { errors, isSubmitting },
     setValue,
-    getValues,
-    watch,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -98,6 +127,10 @@ export default function ServiceOrderEditPage() {
       notes: "",
       technician_ids: [],
       pragas: [],
+      print_address: "",
+      print_city: "",
+      print_uf: "",
+      print_zip: "",
     },
   });
 
@@ -105,7 +138,10 @@ export default function ServiceOrderEditPage() {
     fields: pestFields,
     append: addPest,
     remove: removePest,
-  } = useFieldArray({ control, name: "pragas" });
+  } = useFieldArray({
+    control,
+    name: "pragas",
+  });
 
   // Técnicos como linhas selecionáveis
   const [techRows, setTechRows] = useState<string[]>([]);
@@ -131,7 +167,6 @@ export default function ServiceOrderEditPage() {
     const clientId =
       (so as any)?.client_id ?? (so as any)?.client?.id ?? undefined;
 
-    // agrupa linhas por praga/pest
     const rawLines: any[] = Array.isArray((so as any)?.lines)
       ? (so as any).lines
       : Array.isArray((so as any)?.items)
@@ -164,9 +199,28 @@ export default function ServiceOrderEditPage() {
           .filter((n: number) => Number.isFinite(n) && n > 0)
       : [];
 
+    // overrides vindos do back (se algum dia vier)
+    const ovClient =
+      (so as any)?.print_overrides?.client ||
+      (so as any)?.overrides?.client ||
+      {};
+
+    // Dados do cliente
+    const client = (so as any)?.client || {};
+    const parsed = parseAddressBR(client?.address);
+
+    const clientBase = {
+      address: client?.address || "",
+      city: client?.city || parsed.city || "",
+      uf: (client?.uf || client?.state || parsed.uf || "").toUpperCase(),
+      zip: client?.zip || client?.cep || parsed.zip || "",
+    };
+
+    const s = stripEnum((so as any)?.status) || "OPEN";
+
     reset({
       client_id: clientId as number,
-      status: stripEnum((so as any)?.status) as any,
+      status: s as any, // já canônico (OPEN/IN_PROGRESS/COMPLETED/CANCELLED)
       scheduled_at: toLocalInput((so as any)?.scheduled_at),
       notes: (so as any)?.notes ?? "",
       technician_ids: techIds,
@@ -186,9 +240,12 @@ export default function ServiceOrderEditPage() {
               ],
             },
           ],
+      print_address: ovClient.address ?? clientBase.address,
+      print_city: ovClient.city ?? clientBase.city,
+      print_uf: ovClient.uf ?? clientBase.uf,
+      print_zip: ovClient.zip ?? clientBase.zip,
     });
 
-    // preenche UI dos técnicos
     setTechRows(techIds.map((id) => String(id)));
   }, [so, reset]);
 
@@ -329,7 +386,6 @@ export default function ServiceOrderEditPage() {
               </Button>
             </div>
 
-            {/* mantemos o id da linha (hidden) */}
             <input
               type="hidden"
               {...register(`pragas.${pIndex}.itens.${iIndex}.id` as const)}
@@ -342,31 +398,43 @@ export default function ServiceOrderEditPage() {
   }
 
   const onSubmit = (data: FormData) => {
-    // achata grupos em linhas para o payload de update
+    // 1) Achata grupos para o payload da API (PT-BR)
     const lines = data.pragas.flatMap((group) =>
       group.itens
         .filter((it) => Number(it.product_id) > 0)
-        .map((item) => ({
-          id: item.id, // se existir, backend atualiza; se não, cria
-          praga: group.praga,
-          product_id: Number(item.product_id),
-          aplicacao: item.aplicacao,
-          diluicao: item.diluicao,
-          quantidade: Number(item.quantidade),
-          garantia: item.garantia, // como string
-        }))
+        .map((item) => {
+          const garantia = (item.garantia || "").trim();
+          return {
+            id: item.id,
+            praga: group.praga,
+            product_id: Number(item.product_id),
+            aplicacao: item.aplicacao,
+            diluicao: item.diluicao,
+            quantidade: Number(item.quantidade),
+            garantia: garantia.length ? garantia : undefined,
+          };
+        })
     );
+
+    if (lines.length === 0) {
+      toast.error("Inclua ao menos 1 produto/aplicação antes de salvar.");
+      return;
+    }
+
+    // 2) datetime-local: enviar como 'YYYY-MM-DDTHH:mm' (o hook acrescenta :ss)
+    const scheduledLocal = data.scheduled_at || undefined;
 
     updateOS.mutate(
       {
         id: Number(id),
         data: {
           client_id: Number(data.client_id),
-          status: data.status,
-          scheduled_at: data.scheduled_at || undefined,
+          status: data.status, // OPEN / IN_PROGRESS / COMPLETED / CANCELLED
+          scheduled_at: scheduledLocal,
           notes: data.notes || "",
           technician_ids: data.technician_ids ?? [],
           lines,
+          // NÃO enviar certificate.custom_message nem print_overrides
         },
       },
       {
@@ -375,13 +443,8 @@ export default function ServiceOrderEditPage() {
           navigate(`/ordens-servico/${id}`);
         },
         onError: (err: any) => {
-          const msg =
-            err?.response?.data?.detail ||
-            err?.response?.data?.message ||
-            err?.message ||
-            "Falha ao salvar OS";
-          toast.error(String(msg));
-          console.error("updateOS error:", err);
+          console.error("updateOS error payload:", err?.response?.data);
+          toast.error(formatApiError(err));
         },
       }
     );
@@ -395,12 +458,7 @@ export default function ServiceOrderEditPage() {
         navigate("/ordens-servico");
       },
       onError: (err: any) => {
-        const msg =
-          err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          err?.message ||
-          "Falha ao excluir OS";
-        toast.error(String(msg));
+        toast.error(formatApiError(err));
       },
     });
   };
@@ -501,6 +559,44 @@ export default function ServiceOrderEditPage() {
             />
           </div>
 
+          {/* Ajustes para Impressão (PDF) – não enviados ao back */}
+          <div className="space-y-3 border rounded-md p-3">
+            <h3 className="font-medium">Ajustes para impressão (PDF)</h3>
+            <p className="text-xs text-muted-foreground -mt-1">
+              Esses campos não alteram o cadastro do cliente — só mudam o que
+              sai no PDF desta OS (não são enviados ao servidor).
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="md:col-span-2">
+                <Label>Endereço (override)</Label>
+                <Input
+                  placeholder="Rua, número — complemento"
+                  {...register("print_address")}
+                />
+              </div>
+              <div>
+                <Label>Cidade (override)</Label>
+                <Input
+                  placeholder="Ex.: Campo Alegre"
+                  {...register("print_city")}
+                />
+              </div>
+              <div>
+                <Label>UF (override)</Label>
+                <Input
+                  placeholder="SC"
+                  maxLength={2}
+                  className="uppercase"
+                  {...register("print_uf")}
+                />
+              </div>
+              <div>
+                <Label>CEP (override)</Label>
+                <Input placeholder="89294-000" {...register("print_zip")} />
+              </div>
+            </div>
+          </div>
+
           {/* Técnicos */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -512,11 +608,7 @@ export default function ServiceOrderEditPage() {
                   onClick={() =>
                     createTech.mutate(
                       { name: "Novo técnico" },
-                      {
-                        onSuccess: () => {
-                          toast.success("Técnico criado");
-                        },
-                      }
+                      { onSuccess: () => toast.success("Técnico criado") }
                     )
                   }
                 >

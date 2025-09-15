@@ -1,14 +1,55 @@
-// src/api/client.ts
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import toast from "react-hot-toast";
 import { getApiBaseUrl } from "@/lib/api-base";
 
-const BASE_URL = getApiBaseUrl().replace(/\/+$/, ""); // garante sem barra final
+/** Sempre transforma payload de erro em string legível */
+export function formatApiError(err: any): string {
+  try {
+    const resp = err?.response;
+    const data = resp?.data;
+
+    if (typeof data === "string") return data;
+    if (data?.detail && typeof data.detail === "string") return data.detail;
+    if (data?.title && typeof data.title === "string") return data.title;
+    if (data?.message && typeof data.message === "string") return data.message;
+
+    if (data?.detail && typeof data.detail === "object") {
+      // detail pode ser um bag { errors: {...} }
+      const d = data.detail as any;
+      if (d?.errors && typeof d.errors === "object") {
+        const parts = Object.entries(d.errors).map(([k, v]) => {
+          const text = Array.isArray(v) ? v.join(", ") : String(v);
+          return `${k}: ${text}`;
+        });
+        return parts.join(" • ");
+      }
+    }
+
+    if (data?.errors && typeof data.errors === "object") {
+      const parts = Object.entries(data.errors).map(([k, v]) => {
+        const text = Array.isArray(v) ? v.join(", ") : String(v);
+        return `${k}: ${text}`;
+      });
+      return parts.join(" • ");
+    }
+
+    if (resp?.status) {
+      return `${resp.status} ${resp.statusText || "Erro"}`;
+    }
+
+    return err?.message || "Falha na requisição";
+  } catch {
+    return "Erro inesperado";
+  }
+}
+
+const RAW = getApiBaseUrl();
+export const BASE_URL = (RAW || "/api/v1").replace(/\/+$/, "");
 
 // Detecta host do ngrok p/ setar header
 const IS_NGROK = (() => {
   try {
-    const host = new URL(BASE_URL).hostname;
+    const host = new URL(BASE_URL, window.location.href).hostname;
     return /(^|\.)ngrok(-free)?\.app$/i.test(host);
   } catch {
     return false;
@@ -18,8 +59,8 @@ const IS_NGROK = (() => {
 const ENABLE_AUTH = import.meta.env.VITE_ENABLE_AUTH === "true";
 
 export const apiClient = axios.create({
-  baseURL: BASE_URL, // <-- sempre ngrok
-  withCredentials: false, // usamos Bearer, não cookies
+  baseURL: BASE_URL,
+  withCredentials: false,
   timeout: 30000,
   headers: IS_NGROK ? { "ngrok-skip-browser-warning": "true" } : undefined,
 });
@@ -55,17 +96,7 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 apiClient.interceptors.response.use(
   (res) => res,
   async (error: AxiosError<any>) => {
-    let message = "Erro de conexão";
-    if (error.response) {
-      const data = error.response.data as any;
-      message =
-        data?.detail ||
-        data?.title ||
-        data?.message ||
-        `${error.response.status} ${error.response.statusText}`;
-    } else if (error.message) {
-      message = error.message;
-    }
+    let message = formatApiError(error);
 
     if (error.code === "ERR_NETWORK") {
       message =

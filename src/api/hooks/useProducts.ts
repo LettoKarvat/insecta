@@ -12,7 +12,6 @@ function normalizeListResponse(data: any): {
   items: Product[];
   nextCursor: string;
 } {
-  // Pode vir { items, next_cursor }, { data, nextCursor }, ou um array puro
   const items: Product[] =
     (Array.isArray(data) ? data : data?.items) ?? data?.data ?? [];
   const nextCursor =
@@ -36,12 +35,7 @@ export function useProducts(
       if (onlyCritical) params.only_critical = 1;
       if (cursor) params.cursor = cursor;
 
-      // IMPORTANTE: se apiClient já tem baseURL '/api/v1', NÃO repita aqui
       const res = await apiClient.get("/products", { params });
-      // Se o seu backend já devolve exatamente PaginatedResponse<Product>, pode retornar direto:
-      // return res.data as PaginatedResponse<Product>;
-
-      // Caso contrário, normalizamos para manter compatibilidade:
       const { items, nextCursor } = normalizeListResponse(res.data);
       return {
         items,
@@ -88,7 +82,6 @@ export function useAllProducts(pageLimit = 500) {
       let cursor = "";
       const all: Product[] = [];
 
-      // loop defensivo
       for (let i = 0; i < 50; i++) {
         const params: Record<string, any> = { limit: pageLimit };
         if (cursor) params.cursor = cursor;
@@ -102,7 +95,6 @@ export function useAllProducts(pageLimit = 500) {
         if (!cursor) break;
       }
 
-      // Ordena por nome para UX melhor no select
       all.sort((a: any, b: any) =>
         String(a?.name || "").localeCompare(String(b?.name || ""))
       );
@@ -201,4 +193,29 @@ export function useDeleteProduct() {
       qc.invalidateQueries({ queryKey: ["products"] });
     },
   });
+}
+
+/* ─────────────────────────────────────────────
+   Helpers para pré-visualizar urgência no form
+   ───────────────────────────────────────────── */
+export function computeUrgency(
+  min_quantity?: number | null,
+  current_quantity?: number | null
+): number {
+  const minq = Number(min_quantity ?? 0);
+  const cur = Number(current_quantity ?? 0);
+  if (!Number.isFinite(minq) || minq <= 0) return 0;
+  if (!Number.isFinite(cur) || cur >= minq) return 0;
+  return Math.round(((minq - cur) / minq) * 100);
+}
+
+export function labelUrgency(
+  urgency_number: number
+): "OK" | "Baixa" | "Média" | "Alta" | "Crítica" {
+  const u = Math.max(0, Math.min(100, Math.floor(urgency_number || 0)));
+  if (u === 0) return "OK";
+  if (u < 25) return "Baixa";
+  if (u < 50) return "Média";
+  if (u < 75) return "Alta";
+  return "Crítica";
 }

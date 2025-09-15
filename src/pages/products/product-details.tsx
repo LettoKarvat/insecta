@@ -9,12 +9,15 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 import {
   useProduct,
   useUpdateProduct,
   useUpdateProductQuantity,
   useDeleteProduct,
+  computeUrgency,
+  labelUrgency,
 } from "@/api/hooks/useProducts";
 import type { CreateProductRequest } from "@/types/api";
 
@@ -33,6 +36,7 @@ const schema = z.object({
   antidote: z.string().max(255).nullable().optional(),
   toxicity_action: z.string().max(255).nullable().optional(),
   recommended_dilution: z.string().max(100).nullable().optional(),
+  emergency_phone: z.string().max(50).nullable().optional(),
 
   // novos
   default_diluent: z.string().max(100).nullable().optional(),
@@ -74,6 +78,7 @@ export default function ProductDetails() {
     formState: { errors, isSubmitting, dirtyFields },
     reset,
     getValues,
+    watch,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
@@ -93,6 +98,7 @@ export default function ProductDetails() {
       antidote: product.antidote ?? null,
       toxicity_action: product.toxicity_action ?? null,
       recommended_dilution: product.recommended_dilution ?? null,
+      emergency_phone: product.emergency_phone ?? null,
 
       default_diluent: product.default_diluent ?? null,
       application_rate: product.application_rate ?? null,
@@ -108,7 +114,6 @@ export default function ProductDetails() {
       dirtyFields
     ) as Partial<CreateProductRequest>;
 
-    // nenhum campo alterado
     if (Object.keys(payload).length === 0) {
       toast("Nada para salvar 😊");
       return;
@@ -118,11 +123,19 @@ export default function ProductDetails() {
       await updateProduct.mutateAsync({ id: productId, data: payload });
       toast.success("Produto atualizado!");
     } catch (e: any) {
-      // erros já tratados por interceptor
+      /* erros já tratados por interceptor */
     }
   };
 
   const [delta, setDelta] = useState<number>(0);
+
+  // Prévia de urgência em tempo real (com base nos campos do form)
+  const liveMin = watch("min_quantity");
+  const liveCur = watch("current_quantity");
+  const liveUrg = computeUrgency(liveMin, liveCur);
+  const liveLabel = labelUrgency(liveUrg);
+  const liveVariant =
+    liveUrg === 0 ? "secondary" : liveUrg < 50 ? "default" : "destructive";
 
   const ErrorMsg = ({ msg }: { msg?: string }) =>
     msg ? <p className="text-sm text-red-600 mt-1">{msg}</p> : null;
@@ -148,6 +161,11 @@ export default function ProductDetails() {
     );
   }
 
+  const serverUrg = Math.max(0, Math.min(100, product.urgency_number ?? 0));
+  const serverLabel = product.urgency_label ?? labelUrgency(serverUrg);
+  const serverVariant =
+    serverUrg === 0 ? "secondary" : serverUrg < 50 ? "default" : "destructive";
+
   return (
     <PageShell
       title={`Produto: ${product.name}`}
@@ -165,6 +183,9 @@ export default function ProductDetails() {
               Estoque crítico
             </span>
           ) : null}
+          <Badge className="ml-2" variant={serverVariant as any}>
+            Urgência atual: {serverUrg}% {serverLabel}
+          </Badge>
         </span>
       }
     >
@@ -198,6 +219,19 @@ export default function ProductDetails() {
               {...register("current_quantity", { valueAsNumber: true })}
             />
             <ErrorMsg msg={errors.current_quantity?.message} />
+          </div>
+
+          {/* Prévia de urgência (live) */}
+          <div className="md:col-span-2">
+            <Label>Urgência (prévia)</Label>
+            <div className="flex items-center gap-8 mt-1">
+              <div className="text-sm">
+                <span className="font-medium">{liveUrg}%</span> ({liveLabel})
+              </div>
+              <Badge variant={liveVariant as any}>
+                {liveUrg}% {liveLabel}
+              </Badge>
+            </div>
           </div>
         </div>
 
@@ -252,6 +286,14 @@ export default function ProductDetails() {
                 placeholder="Ex.: 20 ml em 1 L"
               />
               <ErrorMsg msg={errors.recommended_dilution?.message} />
+            </div>
+            <div>
+              <Label>Telefone de emergência</Label>
+              <Input
+                {...register("emergency_phone")}
+                placeholder="Ex.: 0800 722 6001"
+              />
+              <ErrorMsg msg={errors.emergency_phone?.message} />
             </div>
           </div>
         </div>

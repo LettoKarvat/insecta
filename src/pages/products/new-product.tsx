@@ -5,9 +5,14 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useCreateProduct } from "@/api/hooks/useProducts";
+import {
+  useCreateProduct,
+  computeUrgency,
+  labelUrgency,
+} from "@/api/hooks/useProducts";
 import type { CreateProductRequest } from "@/types/api";
 
 const schema = z.object({
@@ -25,6 +30,7 @@ const schema = z.object({
   antidote: z.string().max(255, "Máx. 255").optional(),
   toxicity_action: z.string().max(255, "Máx. 255").optional(),
   recommended_dilution: z.string().max(100, "Máx. 100").optional(),
+  emergency_phone: z.string().max(50, "Máx. 50").optional(),
 
   // Novos campos (opcionais)
   default_diluent: z.string().max(100, "Máx. 100").optional(),
@@ -57,6 +63,7 @@ export function NewProduct() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
+    watch,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -71,6 +78,7 @@ export function NewProduct() {
       antidote: "",
       toxicity_action: "",
       recommended_dilution: "",
+      emergency_phone: "",
 
       default_diluent: "",
       application_rate: "",
@@ -79,6 +87,13 @@ export function NewProduct() {
     },
   });
 
+  // Prévia de urgência em tempo real
+  const minQ = watch("min_quantity");
+  const curQ = watch("current_quantity");
+  const u = computeUrgency(minQ, curQ);
+  const uLabel = labelUrgency(u);
+  const uVariant = u === 0 ? "secondary" : u < 50 ? "default" : "destructive";
+
   const onSubmit = async (data: FormData) => {
     try {
       const payload: CreateProductRequest = cleanPayload(data);
@@ -86,7 +101,7 @@ export function NewProduct() {
       toast.success("Produto criado!");
       navigate("/produtos");
     } catch {
-      // erros já tosteados no hook
+      /* erros já tosteados no hook/interceptor */
     }
   };
 
@@ -131,6 +146,19 @@ export function NewProduct() {
               {...register("current_quantity", { valueAsNumber: true })}
             />
             <ErrorMsg msg={errors.current_quantity?.message} />
+          </div>
+
+          {/* Prévia de urgência */}
+          <div className="md:col-span-2">
+            <Label>Urgência (prévia)</Label>
+            <div className="flex items-center gap-8 mt-1">
+              <div className="text-sm">
+                <span className="font-medium">{u}%</span> ({uLabel})
+              </div>
+              <Badge variant={uVariant as any}>
+                {u}% {uLabel}
+              </Badge>
+            </div>
           </div>
         </div>
 
@@ -186,10 +214,18 @@ export function NewProduct() {
               />
               <ErrorMsg msg={errors.recommended_dilution?.message} />
             </div>
+            <div>
+              <Label>Telefone de emergência</Label>
+              <Input
+                placeholder="Ex.: 0800 722 6001"
+                {...register("emergency_phone")}
+              />
+              <ErrorMsg msg={errors.emergency_phone?.message} />
+            </div>
           </div>
         </div>
 
-        {/* Defaults para preencher a FAES / certificado (os da imagem) */}
+        {/* Defaults para preencher a FAES / certificado */}
         <div className="space-y-4 border rounded-lg p-4">
           <p className="font-medium">
             Padrões de aplicação (usados como pré-preenchimento)

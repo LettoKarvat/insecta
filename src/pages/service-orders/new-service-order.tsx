@@ -30,6 +30,41 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import type { Product } from "@/types/api";
 
+/* ───────── helpers locais ───────── */
+const addMonths = (base: string | Date | undefined, months = 0) => {
+  const d = base ? new Date(base) : new Date();
+  const day = d.getDate();
+  const target = new Date(d.getTime());
+  target.setMonth(d.getMonth() + months);
+  if (target.getDate() < day) target.setDate(0); // ajuste p/ meses com menos dias
+  return target;
+};
+
+// parse seguro para valores de <input type="date" value="YYYY-MM-DD">
+const fromDateInput = (s?: string | null) => {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d); // horário local
+};
+
+// volta um Date -> "YYYY-MM-DD" no horário local
+const toDateInput = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// ✅ sem timeZone "default"
+const fmtBR = (d?: Date | null) => {
+  if (!d) return "—";
+  const t = d.getTime();
+  if (!Number.isFinite(t)) return "—";
+  return d.toLocaleDateString("pt-BR");
+};
+
+/* ───────── schema ───────── */
 const lineSchema = z.object({
   product_id: z.coerce.number().int().positive("Selecione o produto"),
   aplicacao: z.string().min(1, "Aplicação obrigatória"),
@@ -45,6 +80,24 @@ const pestGroupSchema = z.object({
     .min(1, "Inclua ao menos 1 produto para esta praga"),
 });
 
+const certificateSchema = z.object({
+  validity_months: z.coerce
+    .number()
+    .int()
+    .min(1, "Mínimo 1 mês")
+    .max(60, "Máximo 60 meses")
+    .default(24),
+  valid_until: z.string().optional().nullable(), // YYYY-MM-DD
+  execution_days: z.coerce
+    .number()
+    .int()
+    .min(1, "Mínimo 1 dia")
+    .max(30, "Máximo 30 dias")
+    .default(5),
+  issue_city: z.string().optional(),
+  execution_note: z.string().optional(),
+});
+
 const schema = z.object({
   client_id: z.coerce.number().int().positive("Selecione um cliente"),
   scheduled_at: z.string().optional(),
@@ -54,6 +107,8 @@ const schema = z.object({
     .optional()
     .default([]),
   pragas: z.array(pestGroupSchema).min(1, "Inclua ao menos 1 praga"),
+  // ⬇️ bloco opcional (não é obrigatório p/ criar a OS)
+  certificate: certificateSchema.partial().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -79,7 +134,6 @@ export function NewServiceOrder() {
     handleSubmit,
     formState: { errors },
     setValue,
-    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -101,6 +155,13 @@ export function NewServiceOrder() {
           ],
         },
       ],
+      certificate: {
+        validity_months: 24,
+        valid_until: "",
+        execution_days: 5,
+        issue_city: "",
+        execution_note: "",
+      },
     },
   });
 
@@ -140,6 +201,24 @@ export function NewServiceOrder() {
     [techRows]
   );
 
+  /* ───────── watchers para a prévia do certificado ───────── */
+  const watchScheduled = useWatch({ control, name: "scheduled_at" });
+  const watchMonths = useWatch({
+    control,
+    name: "certificate.validity_months",
+  }) as number | undefined;
+  const watchManualUntil = useWatch({
+    control,
+    name: "certificate.valid_until",
+  }) as string | undefined;
+
+  const computedValidUntil = useMemo(() => {
+    if (!watchMonths) return undefined;
+    // usa a data agendada (se houver), senão “agora”
+    const base = (watchScheduled && new Date(watchScheduled)) || new Date();
+    return addMonths(base, Number(watchMonths));
+  }, [watchScheduled, watchMonths]);
+
   const onSubmit = (data: FormData) => {
     const lines = data.pragas.flatMap((group) =>
       group.itens.map((item) => ({
@@ -152,30 +231,46 @@ export function NewServiceOrder() {
       }))
     );
 
-    createOS.mutate(
-      {
-        client_id: data.client_id,
-        scheduled_at: data.scheduled_at || undefined,
-        notes: data.notes || undefined,
-        technician_ids: data.technician_ids ?? [],
-        lines,
+    // decide o "valid_until": manual se preenchido, senão a calculada
+    const chosenUntilDate =
+      (data.certificate?.valid_until &&
+        fromDateInput(data.certificate.valid_until)) ||
+      computedValidUntil ||
+      null;
+
+    const certificate = {
+      validity_months: data.certificate?.validity_months,
+      valid_until: chosenUntilDate ? toDateInput(chosenUntilDate) : undefined, // "YYYY-MM-DD"
+      execution_days: data.certificate?.execution_days,
+      issue_city: data.certificate?.issue_city || undefined,
+      execution_note: data.certificate?.execution_note || undefined,
+    };
+
+    const payload: any = {
+      client_id: data.client_id,
+      scheduled_at: data.scheduled_at || undefined,
+      notes: data.notes || undefined,
+      technician_ids: data.technician_ids ?? [],
+      lines,
+      // ⬇️ agora enviamos sempre; o hook useCreateServiceOrder sanitiza
+      certificate,
+    };
+
+    createOS.mutate(payload, {
+      onSuccess: () => {
+        toast.success("OS criada com sucesso");
+        navigate("/ordens-servico");
       },
-      {
-        onSuccess: () => {
-          toast.success("OS criada com sucesso");
-          navigate("/ordens-servico");
-        },
-        onError: (err: any) => {
-          const msg =
-            err?.response?.data?.detail ||
-            err?.response?.data?.message ||
-            err?.message ||
-            "Falha ao salvar OS";
-          toast.error(String(msg));
-          console.error("createOS error:", err);
-        },
-      }
-    );
+      onError: (err: any) => {
+        const msg =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Falha ao salvar OS";
+        toast.error(String(msg));
+        console.error("createOS error:", err);
+      },
+    });
   };
 
   const onInvalid = () => {
@@ -209,6 +304,7 @@ export function NewServiceOrder() {
       description="Inclua várias pragas e múltiplos produtos por praga"
     >
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+        {/* Cabeçalho / dados gerais */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-2">
             <Label>Cliente *</Label>
@@ -239,6 +335,7 @@ export function NewServiceOrder() {
           </div>
         </div>
 
+        {/* Técnicos */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>Técnicos</Label>
@@ -302,6 +399,7 @@ export function NewServiceOrder() {
           </div>
         </div>
 
+        {/* Pragas / Produtos */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-medium">Pragas</h3>
@@ -357,7 +455,7 @@ export function NewServiceOrder() {
                 register={register}
                 setValue={setValue}
                 products={products}
-                itemErrors={errors.pragas?.[pIndex]?.itens}
+                itemErrors={errors.pragas?.[pIndex]?.itens as any}
               />
             </div>
           ))}
@@ -369,6 +467,85 @@ export function NewServiceOrder() {
           )}
         </div>
 
+        {/* Certificado (opcional) */}
+        <div className="border rounded-md p-3 space-y-3">
+          <h3 className="font-medium">Certificado (opcional)</h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <Label>Validade (meses)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={60}
+                step={1}
+                {...register("certificate.validity_months")}
+              />
+              {errors.certificate?.validity_months && (
+                <p className="text-sm text-destructive">
+                  {String(errors.certificate?.validity_months.message)}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label>Válido até (manual)</Label>
+              <Input
+                type="date"
+                {...register("certificate.valid_until")}
+                title="Opcional: se preencher, sobrescreve a validade calculada"
+              />
+            </div>
+
+            <div>
+              <Label>Dias de execução</Label>
+              <Input
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                {...register("certificate.execution_days")}
+              />
+              {errors.certificate?.execution_days && (
+                <p className="text-sm text-destructive">
+                  {String(errors.certificate?.execution_days.message)}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label>Cidade de emissão</Label>
+              <Input
+                placeholder="Ex.: Campo Alegre"
+                {...register("certificate.issue_city")}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Observação no certificado</Label>
+            <Input
+              placeholder="Opcional"
+              {...register("certificate.execution_note")}
+            />
+          </div>
+
+          <div className="text-sm text-muted-foreground">
+            Prévia de validade:{" "}
+            <span className="font-medium">
+              {watchManualUntil
+                ? fmtBR(fromDateInput(watchManualUntil))
+                : fmtBR(computedValidUntil)}
+            </span>{" "}
+            {watchManualUntil
+              ? "(valor manual)"
+              : watchMonths
+              ? `(agendado + ${watchMonths}m)`
+              : ""}
+          </div>
+        </div>
+
+        {/* Salvar */}
         <div className="flex justify-end">
           <Button
             type="submit"

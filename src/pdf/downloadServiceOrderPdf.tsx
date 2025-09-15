@@ -29,6 +29,7 @@ interface PrintableData {
     phone?: string;
     email?: string;
     city?: string;
+    uf?: string; // ⬅️ exibir UF quando houver
     zip?: string;
   };
   items?: Array<{
@@ -45,6 +46,14 @@ interface PrintableData {
     antidote?: string;
     emergency_phone?: string;
     garantia?: string;
+
+    // ⬇️ urgência (preferencialmente vindo do backend)
+    urgency_number?: number; // 0..100
+    urgency_label?: string; // "OK" | "Baixa" | "Média" | "Alta" | "Crítica"
+
+    // ⬇️ fallback p/ cálculo local se urgência não vier
+    min_quantity?: number;
+    current_quantity?: number;
   }>;
   technicians?: Array<{
     name?: string;
@@ -60,7 +69,9 @@ interface PrintableData {
     validity_months?: number;
     valid_until?: string; // ISO
     methods?: string[];
-    inspections?: string[]; // ISO dates
+    inspections?: string[]; // não usado na UI
+    /** Novo: texto manual que substitui o parágrafo padrão do certificado */
+    custom_message?: string;
   };
   validation_url?: string;
   generated_at?: string;
@@ -81,28 +92,29 @@ const COMPANY_DATA = {
   },
   applicator: { name: "Darlan Antonio Rempalski", cnpj: "53.921.773/0001-77" },
   logo_remote: "https://iili.io/KTFWdQ4.jpg",
-};
+} as const;
 
 const resolveLogo = (override?: string) => {
   const cands = [
     override,
-    COMPANY_DATA.logo_local,
+    // @ts-ignore opcional se existir local
+    (COMPANY_DATA as any).logo_local,
     COMPANY_DATA.logo_remote,
   ].filter(Boolean) as string[];
   const ok = cands.find((u) => /\.(png|jpe?g)$/i.test(u));
-  return ok || "/logo.jpg"; // mantenha um fallback em /public
+  return ok || "/logo.jpg";
 };
 
 /* ───────────────── THEME ───────────────── */
 const THEME = {
   font: "Helvetica",
-  text: "#0f172a", // slate-900
-  mute: "#475569", // slate-600
+  text: "#0f172a",
+  mute: "#475569",
   border: "#e5e7eb",
   bg: "#ffffff",
-  bgAlt: "#f8fafc", // slate-50
-  primary: "#1e40af", // indigo-800
-  primarySoft: "#dbeafe", // indigo-100
+  bgAlt: "#f8fafc",
+  primary: "#1e40af",
+  primarySoft: "#dbeafe",
   success: "#059669",
   danger: "#b91c1c",
   warning: "#a16207",
@@ -136,10 +148,13 @@ const safeFileName = (s?: string | null) =>
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, " ")
     .trim();
+
 const generateQRCode = (data: string) =>
   `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
     data
   )}`;
+
+/** Soma meses e retorna ISO */
 const addMonths = (iso?: string | null, months = 0) => {
   const d = iso ? new Date(iso) : new Date();
   const day = d.getDate();
@@ -148,6 +163,32 @@ const addMonths = (iso?: string | null, months = 0) => {
   if (out.getDate() < day) out.setDate(0);
   return out.toISOString();
 };
+
+/** Diferença em meses entre duas datas (aprox. calendário) */
+const monthsBetween = (isoStart: string, isoEnd: string) => {
+  const a = new Date(isoStart);
+  const b = new Date(isoEnd);
+  let months =
+    (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  if (b.getDate() < a.getDate()) months -= 1;
+  return Math.max(0, months);
+};
+
+/** “18 meses”, “1 ano e 6 meses”, “2 anos” */
+const humanizeMonths = (m?: number) => {
+  if (m == null) return "–";
+  if (m % 12 === 0) {
+    const y = m / 12;
+    return `${y} ano${y > 1 ? "s" : ""}`;
+  }
+  const y = Math.floor(m / 12);
+  const r = m % 12;
+  const parts: string[] = [];
+  if (y > 0) parts.push(`${y} ano${y > 1 ? "s" : ""}`);
+  if (r > 0) parts.push(`${r} mês${r > 1 ? "es" : ""}`);
+  return parts.join(" e ");
+};
+
 const inferServiceType = (items?: PrintableData["items"]) => {
   const txt = (items || [])
     .map((i) => i?.pest || "")
@@ -165,6 +206,40 @@ const statusColor = (s?: string) => {
   return THEME.primary;
 };
 
+/* ───────────────── URGÊNCIA (helpers) ───────────────── */
+type Item = NonNullable<PrintableData["items"]>[number];
+
+/** 0 quando current >= min; senão ((min - current)/min)*100 (arredondado) */
+const computeUrgency = (min?: number | null, cur?: number | null) => {
+  const minq = Number(min ?? 0);
+  const c = Number(cur ?? 0);
+  if (!Number.isFinite(minq) || minq <= 0) return 0;
+  if (!Number.isFinite(c) || c >= minq) return 0;
+  return Math.round(((minq - c) / minq) * 100);
+};
+const labelUrgency = (
+  u: number
+): "OK" | "Baixa" | "Média" | "Alta" | "Crítica" => {
+  const n = Math.max(0, Math.min(100, Math.floor(u || 0)));
+  if (n === 0) return "OK";
+  if (n < 25) return "Baixa";
+  if (n < 50) return "Média";
+  if (n < 75) return "Alta";
+  return "Crítica";
+};
+const urgencyColor = (u: number) =>
+  u === 0 ? THEME.success : u < 50 ? THEME.warning : THEME.danger;
+
+/** Usa o que veio do backend; se não vier, calcula pelo min/current */
+const resolveUrgency = (it: Item) => {
+  const u =
+    typeof it?.urgency_number === "number"
+      ? it.urgency_number
+      : computeUrgency(it?.min_quantity, it?.current_quantity);
+  const label = it?.urgency_label ?? labelUrgency(u);
+  return { u, label };
+};
+
 /* ───────────────── STYLES ───────────────── */
 const S = StyleSheet.create({
   page: {
@@ -174,7 +249,6 @@ const S = StyleSheet.create({
     color: THEME.text,
     backgroundColor: THEME.bg,
   },
-
   header: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -193,7 +267,6 @@ const S = StyleSheet.create({
   headerRight: { flex: 1, backgroundColor: THEME.primary, padding: 12 },
   title: { color: "#fff", fontSize: 16, fontWeight: 700 },
   subtitle: { color: "#e0e7ff", fontSize: 10, marginTop: 2 },
-
   chipRow: { flexDirection: "row", marginTop: 6, flexWrap: "wrap" },
   chip: {
     fontSize: 9,
@@ -213,7 +286,6 @@ const S = StyleSheet.create({
     borderRadius: 999,
     marginTop: 4,
   },
-
   box: {
     backgroundColor: THEME.bgAlt,
     borderWidth: 1,
@@ -230,7 +302,6 @@ const S = StyleSheet.create({
     marginTop: 12,
     marginBottom: 6,
   },
-
   grid: { flexDirection: "row", flexWrap: "wrap" },
   col: { width: "50%", paddingRight: 8, marginBottom: 8 },
   colFull: { width: "100%", marginBottom: 8 },
@@ -242,7 +313,6 @@ const S = StyleSheet.create({
     marginBottom: 2,
   },
   value: { fontSize: 10 },
-
   table: {
     borderWidth: 1,
     borderColor: THEME.border,
@@ -281,7 +351,6 @@ const S = StyleSheet.create({
     textAlign: "left",
     fontStyle: "italic",
   },
-
   notes: {
     fontSize: 10,
     color: THEME.text,
@@ -294,7 +363,6 @@ const S = StyleSheet.create({
     borderLeftColor: THEME.primary,
     marginTop: 6,
   },
-
   sigs: { flexDirection: "row", marginTop: 16 },
   sigBox: {
     flex: 1,
@@ -324,7 +392,6 @@ const S = StyleSheet.create({
     textAlign: "center",
     fontSize: 9,
   },
-
   qr: {
     flexDirection: "row",
     alignItems: "center",
@@ -344,7 +411,6 @@ const S = StyleSheet.create({
     marginBottom: 2,
   },
   qrUrl: { fontSize: 8, color: THEME.mute },
-
   footer: {
     position: "absolute",
     bottom: 18,
@@ -358,7 +424,6 @@ const S = StyleSheet.create({
     borderTopColor: THEME.border,
   },
   footerText: { fontSize: 8, color: THEME.mute },
-
   // CERTIFICADO
   wm: {
     position: "absolute",
@@ -429,6 +494,13 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
   const logoSrc = resolveLogo();
   const stColor = statusColor(data?.order?.status_text);
 
+  // ⬇️ monta "Cidade/UF • CEP" e só mostra se houver conteúdo
+  const cityUF = [data?.client?.city, data?.client?.uf]
+    .filter(Boolean)
+    .join(" / ");
+  const cityUfCep = [cityUF, data?.client?.zip].filter(Boolean).join(" • ");
+  const cityLabel = data?.client?.uf ? "Cidade/UF • CEP" : "Cidade • CEP";
+
   return (
     <Page size="A4" style={S.page}>
       {/* Cabeçalho colorido */}
@@ -488,14 +560,14 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
           <View style={S.colFull}>
             <KV label="Endereço do Cliente" value={data?.client?.address} />
           </View>
-          <View style={S.col}>
-            <KV
-              label="Cidade/UF • CEP"
-              value={[data?.client?.city, data?.client?.zip]
-                .filter(Boolean)
-                .join(" • ")}
-            />
-          </View>
+
+          {/* ⬇️ Só aparece se city/UF/CEP tiver algo */}
+          {cityUfCep ? (
+            <View style={S.col}>
+              <KV label={cityLabel} value={cityUfCep} />
+            </View>
+          ) : null}
+
           <View style={S.col}>
             <KV
               label="Telefone / E-mail"
@@ -519,50 +591,67 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
               <Text style={[S.th, { width: "16%" }]}>Diluição</Text>
               <Text style={[S.th, { width: "16%" }]}>Quantidade</Text>
             </View>
-            {data!.items!.map((it, i) => (
-              <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
-                <Text style={[S.td, { width: "20%" }]}>{it?.pest || "–"}</Text>
-                <View style={{ width: "30%", paddingHorizontal: 4 }}>
-                  <Text
-                    style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
-                  >
-                    {it?.product || "–"}
+            {data!.items!.map((it, i) => {
+              const { u, label } = resolveUrgency(it);
+              return (
+                <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
+                  <Text style={[S.td, { width: "20%" }]}>
+                    {it?.pest || "–"}
                   </Text>
-                  {it?.registration_ms ? (
-                    <Text style={S.tdNotes}>Reg. MS: {it.registration_ms}</Text>
-                  ) : null}
-                  {it?.composition ? (
-                    <Text style={S.tdNotes}>Composição: {it.composition}</Text>
-                  ) : null}
-                  {it?.group_chemical ? (
-                    <Text style={S.tdNotes}>Grupo: {it.group_chemical}</Text>
-                  ) : null}
-                  {it?.recommended_dilution ? (
-                    <Text style={S.tdNotes}>
-                      Recomend.: {it.recommended_dilution}
+                  <View style={{ width: "30%", paddingHorizontal: 4 }}>
+                    <Text
+                      style={[
+                        S.td,
+                        { textAlign: "left", paddingHorizontal: 0 },
+                      ]}
+                    >
+                      {it?.product || "–"}
                     </Text>
-                  ) : null}
-                  {it?.toxicity_action ? (
-                    <Text style={S.tdNotes}>Toxic.: {it.toxicity_action}</Text>
-                  ) : null}
-                  {it?.antidote ? (
-                    <Text style={S.tdNotes}>Antídoto: {it.antidote}</Text>
-                  ) : null}
-                  {it?.emergency_phone ? (
-                    <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
-                  ) : null}
+                    {it?.registration_ms ? (
+                      <Text style={S.tdNotes}>
+                        Reg. MS: {it.registration_ms}
+                      </Text>
+                    ) : null}
+                    {it?.composition ? (
+                      <Text style={S.tdNotes}>
+                        Composição: {it.composition}
+                      </Text>
+                    ) : null}
+                    {it?.group_chemical ? (
+                      <Text style={S.tdNotes}>Grupo: {it.group_chemical}</Text>
+                    ) : null}
+                    {it?.recommended_dilution ? (
+                      <Text style={S.tdNotes}>
+                        Recomend.: {it.recommended_dilution}
+                      </Text>
+                    ) : null}
+                    {it?.toxicity_action ? (
+                      <Text style={S.tdNotes}>
+                        Toxic.: {it.toxicity_action}
+                      </Text>
+                    ) : null}
+                    {it?.antidote ? (
+                      <Text style={S.tdNotes}>Antídoto: {it.antidote}</Text>
+                    ) : null}
+                    {it?.emergency_phone ? (
+                      <Text style={S.tdNotes}>
+                        Emergencia: {it.emergency_phone}
+                      </Text>
+                    ) : null}
+                    {/* ⬇️ URGÊNCIA */}
+                  </View>
+                  <Text style={[S.td, { width: "18%" }]}>
+                    {it?.application || "–"}
+                  </Text>
+                  <Text style={[S.td, { width: "16%" }]}>
+                    {it?.dilution || "–"}
+                  </Text>
+                  <Text style={[S.td, { width: "16%" }]}>
+                    {String(it?.quantity ?? "–")}
+                  </Text>
                 </View>
-                <Text style={[S.td, { width: "18%" }]}>
-                  {it?.application || "–"}
-                </Text>
-                <Text style={[S.td, { width: "16%" }]}>
-                  {it?.dilution || "–"}
-                </Text>
-                <Text style={[S.td, { width: "16%" }]}>
-                  {String(it?.quantity ?? "–")}
-                </Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
       )}
@@ -575,7 +664,7 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
         </View>
       ) : null}
 
-      {/* Assinaturas */}
+      {/* Assinaturas (OS) */}
       <View style={S.sigs} wrap={false}>
         <View style={S.sigBox}>
           <Text style={S.sigTitle}>Técnico Responsável</Text>
@@ -617,7 +706,7 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
       {/* Footer */}
       <View style={S.footer} fixed>
         <Text style={S.footerText}>
-          Gerado em:{" "}
+          Gerado em{" "}
           {fmtDateTime(data?.generated_at || new Date().toISOString())}
         </Text>
         <Text
@@ -634,11 +723,13 @@ const ServiceOrderPage: React.FC<{ data: PrintableData; viaIndex: number }> = ({
 /* ───────────────── PÁGINA DO CERTIFICADO ───────────────── */
 const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
   const items = (data.items || []) as NonNullable<PrintableData["items"]>;
+
   const pragas =
     items
       .map((i) => i?.pest)
       .filter(Boolean)
       .join(", ") || "–";
+
   const methods =
     (data.certificate?.methods?.length
       ? data.certificate.methods
@@ -648,20 +739,32 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
           )
         )
     ).join(" / ") || "–";
+
   const base =
     data.order?.scheduled_at ||
     data.order?.created_at ||
     new Date().toISOString();
-  const validityMonths = data.certificate?.validity_months ?? 24;
-  const validUntil =
-    data.certificate?.valid_until || addMonths(base, validityMonths);
-  const inspections =
-    data.certificate?.inspections ||
-    [6, 12, 18, 24].map((m) => addMonths(base, m));
-  const issueCity =
-    data.certificate?.issue_city || data.client?.city || "Campo Alegre";
-  const serviceType = data.certificate?.service_type || inferServiceType(items);
+
+  // validade: usa meses se vier; senão calcula pelos ISOs
+  const monthsInput = data.certificate?.validity_months;
+  const validUntilISO =
+    data.certificate?.valid_until ||
+    (monthsInput != null ? addMonths(base, monthsInput) : undefined);
+  const monthsForLabel =
+    monthsInput != null
+      ? monthsInput
+      : validUntilISO
+      ? monthsBetween(base, validUntilISO)
+      : undefined;
+  const validityLabel = humanizeMonths(monthsForLabel);
+
   const logoSrc = resolveLogo();
+
+  // ⬇️ Somente a mensagem digitada (custom_message → execution_note). Sem padrão.
+  const message =
+    data.certificate?.custom_message?.trim() ||
+    data.certificate?.execution_note?.trim() ||
+    "";
 
   return (
     <Page size="A4" style={S.page}>
@@ -672,6 +775,7 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
       </View>
       <View style={S.divider} />
 
+      {/* Cartões superiores */}
       <View style={S.cardsRow}>
         <View style={S.card}>
           <Text style={S.cardTitle}>Cliente</Text>
@@ -682,19 +786,26 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
           {data?.client?.address ? (
             <Text style={S.small}>Endereço: {data.client.address}</Text>
           ) : null}
-          {data?.client?.city || data?.client?.zip ? (
+          {data?.client?.city || data?.client?.uf || data?.client?.zip ? (
             <Text style={S.small}>
               Cidade/CEP:{" "}
-              {[data.client?.city, data.client?.zip]
+              {[
+                [data.client?.city, data.client?.uf]
+                  .filter(Boolean)
+                  .join(" / "),
+                data.client?.zip,
+              ]
                 .filter(Boolean)
                 .join(" • ")}
             </Text>
           ) : null}
+          {/* ✅ Validade humanizada */}
           <Text style={[S.small, { marginTop: 6 }]}>
-            Validade do certificado: {String((validityMonths / 12).toFixed(0))}{" "}
-            ano(s) ({fmtDate(validUntil)})
+            Validade do certificado: {validityLabel}
+            {validUntilISO ? ` (${fmtDate(validUntilISO)})` : ""}
           </Text>
         </View>
+
         <View style={[S.card, S.cardLast]}>
           <Text style={S.cardTitle}>Empresa</Text>
           <Text style={S.small}>{COMPANY_DATA.name}</Text>
@@ -706,13 +817,11 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
       </View>
 
       <Text style={S.certTitle}>CERTIFICADO</Text>
-      <Text style={{ fontSize: 10, lineHeight: 1.5, textAlign: "justify" }}>
-        A empresa {COMPANY_DATA.name}, devidamente licenciada, certifica que
-        realizou o serviço de {serviceType.toLowerCase()} no endereço acima,
-        conforme boas práticas e normas sanitárias. Período de execução:{" "}
-        {String(data.certificate?.execution_days ?? 5)} dia(s).{" "}
-        {data.certificate?.execution_note || ""}
-      </Text>
+      {message ? (
+        <Text style={{ fontSize: 10, lineHeight: 1.5, textAlign: "justify" }}>
+          {message}
+        </Text>
+      ) : null}
 
       <Text style={S.sectionTitle}>Pragas controladas</Text>
       <Text style={{ fontSize: 10 }}>{pragas}</Text>
@@ -720,6 +829,7 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
       <Text style={S.sectionTitle}>Método de aplicação</Text>
       <Text style={{ fontSize: 10 }}>{methods}</Text>
 
+      {/* Tabela simples de produtos */}
       {items.length > 0 ? (
         <View style={{ marginTop: 6 }}>
           <View style={S.thead}>
@@ -728,102 +838,40 @@ const CertificatePage: React.FC<{ data: PrintableData }> = ({ data }) => {
             <Text style={[S.th, { width: "18%" }]}>Grupo Químico</Text>
             <Text style={[S.th, { width: "30%" }]}>Antídoto / Telefone</Text>
           </View>
-          {items.map((it, i) => (
-            <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
-              <View style={{ width: "34%", paddingHorizontal: 4 }}>
-                <Text
-                  style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
-                >
-                  {it?.product || "–"}
+          {items.map((it, i) => {
+            const { u, label } = resolveUrgency(it);
+            return (
+              <View key={i} style={[S.row, i % 2 ? S.rowAlt : undefined]}>
+                <View style={{ width: "34%", paddingHorizontal: 4 }}>
+                  <Text
+                    style={[S.td, { textAlign: "left", paddingHorizontal: 0 }]}
+                  >
+                    {it?.product || "–"}
+                  </Text>
+                  {it?.composition ? (
+                    <Text style={S.tdNotes}>Composição: {it.composition}</Text>
+                  ) : null}
+                  {/* ⬇️ URGÊNCIA (nota abaixo do produto) */}
+                </View>
+                <Text style={[S.td, { width: "18%" }]}>
+                  {it?.registration_ms || "–"}
                 </Text>
-                {it?.composition ? (
-                  <Text style={S.tdNotes}>Composição: {it.composition}</Text>
-                ) : null}
-              </View>
-              <Text style={[S.td, { width: "18%" }]}>
-                {it?.registration_ms || "–"}
-              </Text>
-              <Text style={[S.td, { width: "18%" }]}>
-                {it?.group_chemical || "–"}
-              </Text>
-              <View style={{ width: "30%" }}>
-                <Text style={S.td}>
-                  {it?.antidote || "Tratamento sintomático"}
+                <Text style={[S.td, { width: "18%" }]}>
+                  {it?.group_chemical || "–"}
                 </Text>
-                {it?.emergency_phone ? (
-                  <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
-                ) : null}
+                <View style={{ width: "30%" }}>
+                  <Text style={S.td}>
+                    {it?.antidote || "Tratamento sintomático"}
+                  </Text>
+                  {it?.emergency_phone ? (
+                    <Text style={S.tdNotes}>Emerg.: {it.emergency_phone}</Text>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       ) : null}
-
-      <Text style={{ fontSize: 9, color: THEME.mute, marginTop: 6 }}>
-        OBS: Este certificado tem validade de{" "}
-        {String((validityMonths / 12).toFixed(0))} ano(s) ({fmtDate(validUntil)}
-        ).
-      </Text>
-      <Text style={{ fontSize: 11, textAlign: "center", marginTop: 10 }}>
-        {issueCity}
-        {issueCity ? ", " : ""}
-        {fmtDate(data?.order?.scheduled_at)}
-      </Text>
-
-      {inspections.length > 0 ? (
-        <View style={{ flexDirection: "row", marginTop: 8 }}>
-          {inspections.slice(0, 4).map((iso, i) => (
-            <View
-              key={i}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: THEME.border,
-                borderRadius: 8,
-                padding: 8,
-                alignItems: "center",
-                marginLeft: i ? 6 : 0,
-              }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: 700, marginBottom: 12 }}>
-                {fmtDate(iso)}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 9,
-                  color: THEME.mute,
-                  marginTop: 18,
-                  borderTopWidth: 1,
-                  borderTopColor: THEME.border,
-                  width: "100%",
-                  textAlign: "center",
-                  paddingTop: 4,
-                }}
-              >
-                Assinatura
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      <View style={{ flexDirection: "row", marginTop: 12 }}>
-        <View style={[S.sigBox, { marginRight: 12 }]}>
-          <Text style={S.sigTitle}>RESPONSÁVEL TÉCNICO</Text>
-          <Text style={S.sigLine}>
-            {COMPANY_DATA.technical_responsible.name}
-          </Text>
-          <Text style={S.sigSub}>
-            {COMPANY_DATA.technical_responsible.title} —{" "}
-            {COMPANY_DATA.technical_responsible.registry}
-          </Text>
-        </View>
-        <View style={S.sigBox}>
-          <Text style={S.sigTitle}>{COMPANY_DATA.name.toUpperCase()}</Text>
-          <Text style={S.sigLine}>{COMPANY_DATA.applicator.name}</Text>
-          <Text style={S.sigSub}>CNPJ: {COMPANY_DATA.applicator.cnpj}</Text>
-        </View>
-      </View>
 
       <View style={{ marginTop: 12, alignItems: "center" }}>
         <Text style={{ fontSize: 11, fontWeight: 700 }}>

@@ -36,12 +36,17 @@ export interface Product {
   antidote?: string | null;
   toxicity_action?: string | null;
   recommended_dilution?: string | null;
+  emergency_phone?: string | null;
 
   // novos padrões para preencher FAES/certificado
   default_diluent?: string | null;
   application_rate?: string | null;
   target_pests?: string | null;
   default_equipment?: string | null;
+
+  // ⬇️ calculados pelo backend (sem persistir)
+  urgency_number?: number; // 0..100 (% de déficit)
+  urgency_label?: "OK" | "Baixa" | "Média" | "Alta" | "Crítica";
 }
 
 export interface CreateProductRequest {
@@ -56,6 +61,7 @@ export interface CreateProductRequest {
   antidote?: string | null;
   toxicity_action?: string | null;
   recommended_dilution?: string | null;
+  emergency_phone?: string | null;
 
   default_diluent?: string | null;
   application_rate?: string | null;
