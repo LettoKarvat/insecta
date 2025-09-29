@@ -1,9 +1,9 @@
-// src/pages/faes/FAESDetailPage.tsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import dayjs from "dayjs";
 import { useFaesPrintable } from "@/api/hooks/useFaes";
+import { apiClient } from "@/api/client";
 
 function Row({ label, value }: { label: string; value?: any }) {
   return (
@@ -12,6 +12,11 @@ function Row({ label, value }: { label: string; value?: any }) {
       <div className="col-span-2 text-sm">{value ?? "—"}</div>
     </div>
   );
+}
+
+function toNumberOrZero(x: any) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
 }
 
 export default function FAESDetailPage() {
@@ -28,7 +33,15 @@ export default function FAESDetailPage() {
 
   const faes = printable?.faes;
   const client = printable?.client;
-  const d = printable?.data || {};
+  const d = (printable?.data as any) || {};
+
+  const [dias, setDias] = useState<string | number>(
+    d.validade_certificado_dias ?? ""
+  );
+  const [anos, setAnos] = useState<string | number>(
+    d.validade_certificado_anos ?? 2
+  );
+  const emissao = d.data_emissao || faes?.created_at || "";
 
   const produtos = useMemo(
     () => (Array.isArray(d?.produtos_planejados) ? d.produtos_planejados : []),
@@ -42,6 +55,40 @@ export default function FAESDetailPage() {
     () => (Array.isArray(d?.metodos_utilizados) ? d.metodos_utilizados : []),
     [d]
   );
+
+  const diasNum = toNumberOrZero(dias);
+  const anosNum = toNumberOrZero(anos);
+  const venceEm = (() => {
+    if (!emissao) return "—";
+    const base = new Date(emissao);
+    if (diasNum > 0) {
+      const dt = new Date(base);
+      dt.setDate(dt.getDate() + diasNum);
+      return dayjs(dt).format("DD/MM/YYYY");
+    }
+    const dt = new Date(base);
+    dt.setFullYear(dt.getFullYear() + (anosNum || 2));
+    return dayjs(dt).format("DD/MM/YYYY");
+  })();
+
+  async function salvarValidade() {
+    try {
+      const body: any = { data: { ...d } };
+      const diasN = toNumberOrZero(dias);
+      const anosN = toNumberOrZero(anos);
+
+      body.data.validade_certificado_dias = diasN > 0 ? diasN : "";
+      body.data.validade_certificado_anos =
+        diasN > 0 ? Math.max(1, Math.ceil(diasN / 365)) : anosN > 0 ? anosN : 2;
+
+      await apiClient.patch(`/faes/${faes?.id}`, body);
+      await refetch();
+      alert("Validade atualizada!");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar validade.");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
@@ -80,7 +127,6 @@ export default function FAESDetailPage() {
               >
                 Recarregar
               </button>
-              {/* Atalho: reabrir a tela de novo formulário para criar outra */}
               <Link
                 to="/faes/nova"
                 className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50"
@@ -117,17 +163,16 @@ export default function FAESDetailPage() {
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    {/* Se quiser implementar PDF aqui, você pode reutilizar o
-                       componente de PDF da FAESFormPage e chamar download */}
                     <Link
                       to={`/faes/${faes?.id}`}
                       className="px-3 py-2 rounded-xl border hover:bg-gray-50"
                       onClick={async (e) => {
                         e.preventDefault();
-                        // Abre o JSON “printable” numa nova aba (debug rápido)
                         const blob = new Blob(
                           [JSON.stringify(printable, null, 2)],
-                          { type: "application/json" }
+                          {
+                            type: "application/json",
+                          }
                         );
                         const url = URL.createObjectURL(blob);
                         window.open(url, "_blank");
@@ -174,6 +219,68 @@ export default function FAESDetailPage() {
                       />
                     </div>
                   </div>
+                </div>
+              </section>
+
+              {/* Validade (edição rápida) */}
+              <section className="rounded-2xl border bg-white p-4 sm:p-6">
+                <h3 className="text-base font-semibold mb-3">
+                  Validade do certificado
+                </h3>
+                <div className="grid md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">
+                      Validade (dias)
+                    </label>
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                      value={dias as any}
+                      onChange={(e) =>
+                        setDias(
+                          e.target.value === "" ? "" : Number(e.target.value)
+                        )
+                      }
+                      placeholder="Ex.: 730"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Se &gt; 0, tem prioridade sobre anos.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">
+                      Validade (anos)
+                    </label>
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                      value={anos as any}
+                      onChange={(e) =>
+                        setAnos(
+                          e.target.value === "" ? "" : Number(e.target.value)
+                        )
+                      }
+                      disabled={toNumberOrZero(dias) > 0}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Desabilita quando há dias &gt; 0.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Vence em</label>
+                    <div className="mt-1 h-[42px] flex items-center rounded-xl border px-3">
+                      <span className="text-sm">{venceEm}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50"
+                    onClick={salvarValidade}
+                  >
+                    Salvar validade
+                  </button>
                 </div>
               </section>
 

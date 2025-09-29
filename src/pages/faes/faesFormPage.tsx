@@ -74,6 +74,11 @@ const cls = (...c: (string | undefined | false)[]) =>
 const iso = (s?: string | null) => (s ? String(s).slice(0, 10) : "");
 const safe = (v: any) => (typeof v === "string" ? v : v ?? "");
 
+function toNumberOrZero(x: any) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
+}
+
 const COMPANY = {
   nome: "Insecta Dedetizadora LTDA",
   cnpj: "53.921.773/0001-77",
@@ -179,7 +184,7 @@ function buildLabelMap(schema: FAESchema) {
 const FAES_ENDPOINTS = {
   create: "/faes",
   printable: (id: number) => `/faes/${id}/printable`,
-  upload: "/uploads", // troque para "/upload" se seu backend for singular
+  upload: "/uploads",
 };
 
 async function apiCreateFAES(payload: {
@@ -239,7 +244,7 @@ type ProductLite = {
   target_pests?: string | null;
   default_equipment?: string | null;
   antidote?: string | null;
-  active_ingredient?: string | null; // se existir no seu Product
+  active_ingredient?: string | null;
 };
 
 function normalizeProduct(p: any): ProductLite {
@@ -370,7 +375,7 @@ function ProductSelect({
 }
 
 /* =========================
-   PDF (3 páginas)
+   PDF (3 páginas) – (mantido aqui se você ainda usa esse doc local)
 ========================= */
 const P = StyleSheet.create({
   page: { padding: 28, fontSize: 10, fontFamily: "Helvetica" },
@@ -427,408 +432,11 @@ function addYears(dateISO?: string, years: number = 2) {
   return d.toLocaleDateString("pt-BR");
 }
 
-function FAESPdfDoc({ printable }: { printable: any }) {
-  const d = printable?.data || {};
-  const produtos = Array.isArray(d.produtos_planejados)
-    ? d.produtos_planejados
-    : [];
-  const produtosResumo = Array.isArray(d.produtos_resumo)
-    ? d.produtos_resumo
-    : [];
-  const etapas = Array.isArray(d.procedimentos) ? d.procedimentos : [];
-  const cron = Array.isArray(d.cronograma_previsto)
-    ? d.cronograma_previsto
-    : [];
-  const insp = Array.isArray(d.inspecoes_programadas)
-    ? d.inspecoes_programadas
-    : [];
-  const validadeAnos = Number(d.validade_certificado_anos || 2);
-
-  /* Página 1 – POP + planejamento */
-  const Page1 = (
-    <Page size="A4" style={P.page}>
-      <View style={P.box}>
-        <Text style={P.h1}>CASARÃO / {COMPANY.nome.toUpperCase()}</Text>
-        <Text style={P.text}>
-          Nome da Empresa: {COMPANY.nome} • CNPJ: {COMPANY.cnpj}
-        </Text>
-      </View>
-
-      <View style={P.box}>
-        <View style={P.row}>
-          <View style={P.col}>
-            <KV
-              label="Cliente"
-              value={d.cliente_nome || printable.client?.name}
-            />
-          </View>
-          <View style={P.col}>
-            <KV
-              label="CNPJ/CPF"
-              value={d.cliente_cnpj || printable.client?.doc}
-            />
-          </View>
-        </View>
-        <View style={P.row}>
-          <View style={P.col}>
-            <KV label="Área de Aplicação" value={d.area_aplicacao} />
-          </View>
-          <View style={P.col}>
-            <KV label="Área Tratada (m²)" value={d.area_tratada_m2} />
-          </View>
-          <View style={P.col}>
-            <KV label="Data de Emissão" value={d.data_emissao} />
-          </View>
-        </View>
-        <View style={P.row}>
-          <View style={P.col}>
-            <KV label="Responsável Técnico" value={d.responsavel_tecnico} />
-          </View>
-          <View style={P.col}>
-            <KV label="CREA/Registro" value={d.crea} />
-          </View>
-          <View style={P.col}>
-            <KV label="Tempo previsto (dias)" value={d.tempo_previsto_dias} />
-          </View>
-        </View>
-        <View style={P.row}>
-          <View style={P.col}>
-            <KV label="Aplicador" value={d.aplicador} />
-          </View>
-          <View style={P.col}>
-            <KV label="Licença Sanitária" value={d.licenca_sanitaria} />
-          </View>
-          <View style={P.col}>
-            <KV
-              label="Validade Certificado (anos)"
-              value={d.validade_certificado_anos || 2}
-            />
-          </View>
-        </View>
-      </View>
-
-      <Text style={P.h2}>Objetivo</Text>
-      <View style={P.box}>
-        <Text style={P.text}>
-          {d.objetivo ||
-            "Estabelecer diretrizes para a execução do serviço, garantindo segurança e eficácia."}
-        </Text>
-      </View>
-
-      <Text style={P.h2}>Responsabilidades</Text>
-      <View style={P.box}>
-        <Text style={P.text}>
-          {d.responsabilidades ||
-            "A equipe técnica deve realizar a aplicação conforme o POP; o responsável técnico supervisiona e assegura conformidade sanitária e legal."}
-        </Text>
-      </View>
-
-      <Text style={P.h2}>Materiais e Equipamentos</Text>
-      <View style={P.box}>
-        <Text style={P.text}>
-          {d.materiais_equipamentos ||
-            "Produtos domissanitários com registro ANVISA/MS; Pulverizadores manuais/costais; Equipamentos de perfuração/injeção; EPIs (luvas, máscara, óculos, avental, botas)."}{" "}
-        </Text>
-      </View>
-
-      <Text style={P.h2}>POP – Procedimento Operacional Padrão</Text>
-      <View style={P.box}>
-        {etapas.length === 0 ? (
-          <Text style={P.text}>
-            Avaliação prévia do local; Preparo dos produtos; Aplicação (injeção,
-            barreira química, pulverização); Finalização
-            (sinalização/armazenamento); Registro (datas, lotes); Segurança
-            (EPIs, reentrada).
-          </Text>
-        ) : (
-          etapas.map((e: any, i: number) => (
-            <View key={i} style={{ marginBottom: 6 }}>
-              <Text style={[P.text, { fontWeight: 700 }]}>{e.titulo}</Text>
-              <Text style={P.text}>{e.descricao}</Text>
-            </View>
-          ))
-        )}
-      </View>
-
-      <Text style={P.h2}>Produtos Planejados</Text>
-      <View style={P.table}>
-        <View style={P.tr}>
-          {[
-            "Produto",
-            "Grupo químico",
-            "Registro MS",
-            "Diluente",
-            "Qtd",
-            "Praga alvo",
-            "Equipamento",
-            "Antídoto",
-          ].map((h, i) => (
-            <Text key={i} style={[P.th, i === 7 && { borderRight: 0 }]}>
-              {h}
-            </Text>
-          ))}
-        </View>
-        {produtos.map((p: any, idx: number) => (
-          <View key={idx} style={P.tr}>
-            <Text style={P.td}>{p.produto}</Text>
-            <Text style={P.td}>{p.grupo_quimico}</Text>
-            <Text style={P.td}>{p.registro_ms}</Text>
-            <Text style={P.td}>{p.diluente}</Text>
-            <Text style={P.td}>{p.quantidade}</Text>
-            <Text style={P.td}>{p.praga_alvo}</Text>
-            <Text style={P.td}>{p.equipamento}</Text>
-            <Text style={[P.td, { borderRight: 0 }]}>{p.antidoto}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={P.h2}>
-        Resumo (Produto / Princípio ativo / Registro / Forma de aplicação)
-      </Text>
-      <View style={P.table}>
-        <View style={P.tr}>
-          {[
-            "Produto",
-            "Princípio Ativo",
-            "Registro ANVISA",
-            "Forma de Aplicação",
-          ].map((h, i) => (
-            <Text key={i} style={[P.th, i === 3 && { borderRight: 0 }]}>
-              {h}
-            </Text>
-          ))}
-        </View>
-        {produtosResumo.map((r: any, idx: number) => (
-          <View key={idx} style={P.tr}>
-            <Text style={P.td}>{r.produto}</Text>
-            <Text style={P.td}>{r.principio_ativo}</Text>
-            <Text style={P.td}>{r.registro_ms}</Text>
-            <Text style={[P.td, { borderRight: 0 }]}>{r.forma_aplicacao}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={P.box}>
-        <KV
-          label="Pragas alvo"
-          value={
-            (Array.isArray(d.pragas_alvo) ? d.pragas_alvo : []).join(", ") ||
-            "—"
-          }
-        />
-        <KV
-          label="Métodos Utilizados"
-          value={
-            (Array.isArray(d.metodos_utilizados)
-              ? d.metodos_utilizados
-              : []
-            ).join(", ") || "—"
-          }
-        />
-      </View>
-    </Page>
-  );
-
-  /* Página 2 – Cronograma + Recomendações + Inspeções */
-  const Page2 = (
-    <Page size="A4" style={P.page}>
-      <View style={P.box}>
-        <Text style={P.h1}>RELATÓRIO TÉCNICO (PLANEJAMENTO)</Text>
-        <Text style={P.text}>
-          {COMPANY.nome} • CNPJ: {COMPANY.cnpj} • {COMPANY.endereco} •{" "}
-          {COMPANY.telefone} • {COMPANY.email}
-        </Text>
-      </View>
-
-      <Text style={P.h2}>Cronograma Previsto</Text>
-      {d.cronograma_previsto_texto ? (
-        <View style={P.box}>
-          <Text style={P.text}>{d.cronograma_previsto_texto}</Text>
-        </View>
-      ) : null}
-      <View style={P.table}>
-        <View style={P.tr}>
-          {["Data", "Atividade/Etapa", "Observações"].map((h, i) => (
-            <Text key={i} style={[P.th, i === 2 && { borderRight: 0 }]}>
-              {h}
-            </Text>
-          ))}
-        </View>
-        {cron.map((e: any, idx: number) => (
-          <View key={idx} style={P.tr}>
-            <Text style={P.td}>{e.data}</Text>
-            <Text style={P.td}>{e.atividade}</Text>
-            <Text style={[P.td, { borderRight: 0 }]}>{e.observacoes}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={P.h2}>Recomendações Pós-Aplicação</Text>
-      <View style={P.box}>
-        <Text style={P.text}>
-          {d.recomendacoes_pos ||
-            "Evitar contato com superfícies tratadas por 6 horas; reentrada conforme orientação técnica; evitar limpeza úmida por 24 horas; monitorar sinais de reinfestação."}
-        </Text>
-        <Text style={[P.text, P.mt8]}>
-          CIT (Centro de Informações Toxicológicas): {COMPANY.cit}
-        </Text>
-      </View>
-
-      <Text style={P.h2}>Inspeções / Reinspeções Programadas</Text>
-      {d.data_retorno ? (
-        <View style={P.box}>
-          <KV label="Data de retorno" value={d.data_retorno} />
-        </View>
-      ) : null}
-      <View style={P.table}>
-        <View style={P.tr}>
-          {["Data", "Tipo", "Assinatura"].map((h, i) => (
-            <Text key={i} style={[P.th, i === 2 && { borderRight: 0 }]}>
-              {h}
-            </Text>
-          ))}
-        </View>
-        {insp.map((r: any, idx: number) => (
-          <View key={idx} style={P.tr}>
-            <Text style={P.td}>{r.data}</Text>
-            <Text style={P.td}>{r.tipo}</Text>
-            <Text style={[P.td, { borderRight: 0 }]}>
-              {r.assinatura ? "Anexo" : "—"}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={[P.row, P.mt8]}>
-        <View style={P.col}>
-          <Text style={P.text}>Responsável Técnico</Text>
-          <Text style={[P.text, P.center]}>__________________________</Text>
-          <Text style={[P.text, P.center]}>{d.responsavel_tecnico || " "}</Text>
-          <Text style={[P.text, P.center]}>CREA: {d.crea || " "}</Text>
-        </View>
-        <View style={P.col}>
-          <Text style={P.text}>Aplicador</Text>
-          <Text style={[P.text, P.center]}>__________________________</Text>
-        </View>
-        <View style={P.col}>
-          <Text style={P.text}>Cliente</Text>
-          <Text style={[P.text, P.center]}>__________________________</Text>
-        </View>
-      </View>
-    </Page>
-  );
-
-  /* Página 3 – Certificado */
-  const validadeStr = addYears(d.data_emissao, validadeAnos);
-  const Page3 = (
-    <Page size="A4" style={P.page}>
-      <View style={P.box}>
-        <Text style={P.h1}>CERTIFICADO</Text>
-        <Text style={P.text}>
-          {COMPANY.nome} • CNPJ: {COMPANY.cnpj} • Licença Sanitária:{" "}
-          {d.licenca_sanitaria || "—"}
-        </Text>
-      </View>
-
-      <View style={P.box}>
-        <Text style={P.text}>
-          A empresa {COMPANY.nome}, devidamente licenciada e legalmente
-          habilitada, certifica que realizará o serviço de controle de cupins no
-          endereço indicado, conforme POP descrito e produtos com registro no
-          Ministério da Saúde/ANVISA. Validade prevista do certificado:{" "}
-          {validadeAnos} ano(s){d.data_emissao ? ` (até ${validadeStr})` : ""}.
-        </Text>
-        <View style={[P.row, P.mt8]}>
-          <View style={P.col}>
-            <KV
-              label="Cliente"
-              value={d.cliente_nome || printable.client?.name}
-            />
-          </View>
-          <View style={P.col}>
-            <KV
-              label="CNPJ/CPF"
-              value={d.cliente_cnpj || printable.client?.doc}
-            />
-          </View>
-        </View>
-        <KV
-          label="Endereço"
-          value={d.cliente_endereco || printable.client?.address}
-        />
-        <View style={P.row}>
-          <View style={P.col}>
-            <KV label="Cidade/UF" value={d.cliente_cidade_uf} />
-          </View>
-          <View style={P.col}>
-            <KV label="CEP" value={d.cliente_cep} />
-          </View>
-        </View>
-        <KV
-          label="Pragas controladas"
-          value={
-            (Array.isArray(d.pragas_alvo) ? d.pragas_alvo : []).join(", ") ||
-            "—"
-          }
-        />
-        <KV
-          label="Método de aplicação"
-          value={
-            (Array.isArray(d.metodos_utilizados)
-              ? d.metodos_utilizados
-              : []
-            ).join(", ") || "—"
-          }
-        />
-        {d.data_retorno ? (
-          <KV label="Data de retorno" value={d.data_retorno} />
-        ) : null}
-      </View>
-
-      <View style={[P.row, P.mt8]}>
-        <View style={P.col}>
-          <Text style={P.text}>Responsável Técnico</Text>
-          <Text style={[P.text, P.center]}>__________________________</Text>
-          <Text style={[P.text, P.center]}>{d.responsavel_tecnico || " "}</Text>
-          <Text style={[P.text, P.center]}>CREA: {d.crea || " "}</Text>
-        </View>
-        <View style={P.col}>
-          <Text style={P.text}>INSECTA DEDETIZADORA</Text>
-          <Text style={[P.text, P.center]}>__________________________</Text>
-        </View>
-        <View style={P.col}>
-          <Text style={P.text}>Cliente</Text>
-          <Text style={[P.text, P.center]}>__________________________</Text>
-        </View>
-      </View>
-    </Page>
-  );
-
-  return (
-    <Document>
-      {Page1}
-      {Page2}
-      {Page3}
-    </Document>
-  );
-}
-async function downloadFAESPdf(printable: any) {
-  const blob = await pdf(<FAESPdfDoc printable={printable} />).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const code =
-    printable?.faes?.public_code || `FAES-${printable?.faes?.id ?? ""}`;
-  a.download = `${code}.pdf`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
 /* =========================
-   SCHEMA (pré-serviço)
+   SCHEMA (pré-serviço) – ATUALIZADO
 ========================= */
 const DEFAULT_SCHEMA: FAESchema = {
-  version: "2.1",
+  version: "2.2",
   title: "Ficha Avaliativa de Execução de Serviço (Pré-Execução)",
   sections: [
     {
@@ -960,12 +568,7 @@ const DEFAULT_SCHEMA: FAESchema = {
           type: "repeater",
           minItems: 1,
           children: [
-            {
-              id: "produto",
-              label: "Produto",
-              type: "text",
-              required: true,
-            },
+            { id: "produto", label: "Produto", type: "text", required: true },
             { id: "grupo_quimico", label: "Grupo químico", type: "text" },
             {
               id: "registro_ms",
@@ -978,8 +581,6 @@ const DEFAULT_SCHEMA: FAESchema = {
             { id: "praga_alvo", label: "Praga alvo", type: "text" },
             { id: "equipamento", label: "Equipamento", type: "text" },
             { id: "antidoto", label: "Antídoto/Tratamento", type: "text" },
-            // Dica: você pode adicionar "productId" no schema se quiser exibir no formulário,
-            // mas não é obrigatório — a gente injeta no objeto ao selecionar.
           ],
         },
         {
@@ -1094,6 +695,30 @@ const DEFAULT_SCHEMA: FAESchema = {
       ],
     },
 
+    /* >>> NOVA SEÇÃO – MONITORAMENTO <<< */
+    {
+      id: "monitoramento",
+      title: "Monitoramento e Garantia",
+      fields: [
+        {
+          id: "monitoramento",
+          label: "Texto de monitoramento/garantia",
+          type: "textarea",
+          placeholder:
+            "Ex.: Garantia de 30 dias. Reinspeções mensais conforme contrato...",
+          columns: 3,
+        },
+        {
+          id: "validade_certificado_dias",
+          label: "Validade do Certificado (dias)",
+          type: "number",
+          description:
+            "Se preencher (>0), substitui o campo 'anos' e calcula a data 'até ...' com base na data de emissão.",
+          columns: 1,
+        },
+      ],
+    },
+
     {
       id: "assinaturas",
       title: "Assinaturas e Anexos",
@@ -1121,6 +746,7 @@ type RendererProps = {
   field: Field;
   value: any;
   onChange: (id: string, value: any) => void;
+  allValues?: Record<string, any>;
 };
 
 function MultiChipInput({
@@ -1341,7 +967,62 @@ function SimpleInput({ field, value, onChange }: RendererProps) {
 /* =========================
    Página
 ========================= */
-function FieldRenderer({ field, value, onChange }: RendererProps) {
+function FieldRenderer({ field, value, onChange, allValues }: RendererProps) {
+  // —— Prioridade de validade por DIAS (desabilita ANOS quando dias>0)
+  if (field.id === "validade_certificado_anos") {
+    const dias = toNumberOrZero(allValues?.validade_certificado_dias);
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium">{field.label}</label>
+        <input
+          type="number"
+          min={0}
+          className="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+          value={value as any}
+          onChange={(e) =>
+            onChange(
+              field.id,
+              e.target.value === "" ? "" : Number(e.target.value)
+            )
+          }
+          disabled={dias > 0}
+        />
+        <p className="text-xs text-gray-500">
+          Se “dias” &gt; 0, este campo fica desabilitado (usa dias como
+          prioridade).
+        </p>
+      </div>
+    );
+  }
+  if (field.id === "validade_certificado_dias") {
+    const dias = toNumberOrZero(value);
+    const sugestaoAnos =
+      dias > 0
+        ? Math.max(1, Math.ceil(dias / 365))
+        : toNumberOrZero(allValues?.validade_certificado_anos);
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium">{field.label}</label>
+        <input
+          type="number"
+          min={0}
+          className="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+          value={value as any}
+          onChange={(e) =>
+            onChange(
+              field.id,
+              e.target.value === "" ? "" : Number(e.target.value)
+            )
+          }
+          placeholder="Ex.: 730"
+        />
+        <p className="text-xs text-gray-500">
+          Prioridade sobre “anos”. Sugestão de anos: {sugestaoAnos}
+        </p>
+      </div>
+    );
+  }
+
   if (field.type === "repeater") {
     const rep = field as FieldRepeater;
     const items: any[] = Array.isArray(value) ? value : [];
@@ -1410,7 +1091,6 @@ function FieldRenderer({ field, value, onChange }: RendererProps) {
                           onPickProduct={(p) => {
                             const next = [...items];
                             if (!p) {
-                              // limpar
                               next[idx] = {
                                 ...row,
                                 produto: "",
@@ -1419,7 +1099,7 @@ function FieldRenderer({ field, value, onChange }: RendererProps) {
                             } else {
                               next[idx] = {
                                 ...row,
-                                productId: p.id, // <- grava ID para o _enrich_products do back
+                                productId: p.id,
                                 produto: p.name,
                                 grupo_quimico:
                                   row.grupo_quimico || p.group_chemical || "",
@@ -1492,6 +1172,7 @@ export default function FAESFormPage() {
     const init = toInitialValues(sc);
     init["data_emissao"] = iso(new Date().toISOString());
     init["validade_certificado_anos"] = 2;
+    init["validade_certificado_dias"] = ""; // deixa vazio; se preencher, sobrescreve anos
 
     // Pré-preenchimento com seus dados
     init["responsavel_tecnico"] = "Filipe Antônio Kroll";
@@ -1606,7 +1287,22 @@ export default function FAESFormPage() {
     }
     setSubmitting(true);
     try {
-      const dataReady = await deepReplaceFiles(values);
+      // ——— Normalização de validade (front-only)
+      const dias = toNumberOrZero((values as any).validade_certificado_dias);
+      const anos = toNumberOrZero((values as any).validade_certificado_anos);
+
+      const normalized: Record<string, any> = { ...(values as any) };
+      if (dias > 0) {
+        normalized.validade_certificado_anos = Math.max(
+          1,
+          Math.ceil(dias / 365)
+        );
+      } else {
+        normalized.validade_certificado_anos = anos > 0 ? anos : 2;
+        normalized.validade_certificado_dias = "";
+      }
+
+      const dataReady = await deepReplaceFiles(normalized);
       const payload = {
         schemaVersion: schema.version,
         schemaTitle: schema.title,
@@ -1632,7 +1328,8 @@ export default function FAESFormPage() {
     }
   };
 
-  const clients = clientsList?.items ?? [];
+  const { data: clientsListData } = useClients("", "", 100);
+  const clients = clientsListData?.items ?? [];
   const canGeneratePdf = Number.isFinite(submissionId) && !!submissionId;
   if (!schema) return <div className="p-6">Carregando…</div>;
 
@@ -1735,6 +1432,9 @@ export default function FAESFormPage() {
                   const printable = await apiGetFAESPrintable(
                     Number(submissionId)
                   );
+                  const { downloadFAESPdf } = await import(
+                    "@/api/hooks/useFaesPdfDoc"
+                  );
                   await downloadFAESPdf(printable);
                 }}
                 disabled={!canGeneratePdf}
@@ -1777,6 +1477,7 @@ export default function FAESFormPage() {
                         field={field}
                         value={(values as any)[field.id]}
                         onChange={handleChange}
+                        allValues={values as any}
                       />
                     </div>
                   ))}
@@ -1815,6 +1516,9 @@ export default function FAESFormPage() {
                 if (!submissionId) return;
                 const printable = await apiGetFAESPrintable(
                   Number(submissionId)
+                );
+                const { downloadFAESPdf } = await import(
+                  "@/api/hooks/useFaesPdfDoc"
                 );
                 await downloadFAESPdf(printable);
               }}

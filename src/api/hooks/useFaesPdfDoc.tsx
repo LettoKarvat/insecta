@@ -65,23 +65,16 @@ const THEME = {
 const safeJoin = (arr?: any[], sep = ", ") =>
   Array.isArray(arr) ? arr.filter(Boolean).join(sep) : "";
 
-const isIsoDate = (s?: string | null) => {
-  if (!s) return false;
-  const d = new Date(s);
-  return !isNaN(d.getTime());
-};
-
 const fmtDateBR = (iso?: string | null) => {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
     const dd = String(d.getDate()).padStart(2, "0");
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
     return `${dd}/${mm}/${yyyy}`;
   } catch {
-    return "";
+    return String(iso);
   }
 };
 
@@ -89,7 +82,6 @@ const addYearsBR = (iso?: string | null, years = 2) => {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
     d.setFullYear(d.getFullYear() + years);
     return fmtDateBR(d.toISOString());
   } catch {
@@ -97,12 +89,11 @@ const addYearsBR = (iso?: string | null, years = 2) => {
   }
 };
 
-const addDaysBR = (iso?: string | null, days: number = 0) => {
-  if (!iso) return "";
+const addDaysBR = (iso?: string | null, days = 0) => {
+  if (!iso || !days) return "";
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
-    d.setDate(d.getDate() + Number(days || 0));
+    d.setDate(d.getDate() + days);
     return fmtDateBR(d.toISOString());
   } catch {
     return "";
@@ -240,13 +231,13 @@ export function FAESPdfDoc({ printable }: { printable: FaesPrintable }) {
   const comp = printable.company || {};
   const d = printable?.data || {};
 
-  // LOGO (com fallback e validação de extensão)
+  // ─── LOGO ─────────────────────────
   const RAW_LOGO = d.logo_url || comp.logo_url || "https://iili.io/KTFWdQ4.jpg";
   const isValidImage =
     typeof RAW_LOGO === "string" && /\.(png|jpe?g)$/i.test(RAW_LOGO);
   const LOGO_SRC = isValidImage ? RAW_LOGO : "/logo.jpg";
 
-  // ARRAYS
+  // ─── DADOS PADRÕES / ARRAYS ─────────────────
   const produtosPlanejados = Array.isArray(d.produtos_planejados)
     ? d.produtos_planejados
     : [];
@@ -261,7 +252,7 @@ export function FAESPdfDoc({ printable }: { printable: FaesPrintable }) {
     ? d.inspecoes_programadas
     : [];
 
-  // MAPEAMENTO DE DEMANDA / CAMPOS NOVOS
+  // ─── MAPEAMENTO + MONITORAMENTO EDITÁVEL ─────
   const mapeamento = d.mapeamento_demanda || {};
   const escopoServico: string =
     mapeamento.escopo ||
@@ -276,35 +267,23 @@ export function FAESPdfDoc({ printable }: { printable: FaesPrintable }) {
     observacoes?: string;
   }> = mapeamento.cronograma || cronPrev;
 
-  // Validade: prioriza DIAS; se 0/vazio, usa ANOS (com normalização)
-  const diasRaw = Number(d.validade_certificado_dias);
-  const validadeDiasNum =
-    Number.isFinite(diasRaw) && diasRaw > 0 ? Math.floor(diasRaw) : 0;
-
-  const anosRaw = Number(d.validade_certificado_anos);
-  const validadeAnos =
-    Number.isFinite(anosRaw) && anosRaw > 0 ? Math.ceil(anosRaw) : 2;
-
-  // Base da validade: usa data_emissao; se inválida, tenta created_at; senão vazio
-  const emissaoOk = isIsoDate(d.data_emissao) ? d.data_emissao : null;
-  const createdOk = isIsoDate(printable.faes?.created_at)
-    ? printable.faes?.created_at
-    : null;
-  const dataBase = emissaoOk || createdOk || "";
-
+  // MONITORAMENTO prioriza o que vem do formulário
+  const validadeAnosNum = Number(d.validade_certificado_anos || 2);
+  const validadeDiasNum = Number(d.validade_certificado_dias || 0);
+  const dataBase = d.data_emissao || printable.faes?.created_at || "";
   const validadeAte =
     validadeDiasNum > 0
       ? addDaysBR(dataBase, validadeDiasNum)
-      : addYearsBR(dataBase, validadeAnos);
-
+      : addYearsBR(dataBase, validadeAnosNum);
   const validadeTexto =
     validadeDiasNum > 0
       ? `${validadeDiasNum} dia(s)`
-      : `${validadeAnos} ano(s)`;
+      : `${validadeAnosNum} ano(s)`;
 
   const monitoramentoGarantia: string =
     d.monitoramento ??
     mapeamento.monitoramento ??
+    d.monitoramento ??
     `Garantia de ${validadeTexto}. Reinspeção periódica conforme contrato. Laudo técnico e certificado serão emitidos.`;
 
   const headerCompany = `${(
@@ -599,7 +578,7 @@ export function FAESPdfDoc({ printable }: { printable: FaesPrintable }) {
     </Page>
   );
 
-  /* ───────────────── PÁGINA 4 ───────────────── */
+  /* ───────────────── PÁGINA 4 – CERTIFICADO ───────────────── */
   const Page4 = (
     <Page size="A4" style={S.page}>
       <View style={[S.header, { marginBottom: 8 }]}>

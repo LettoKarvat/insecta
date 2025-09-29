@@ -147,15 +147,55 @@ export default function FAESListPage() {
                       const statusBadge = f.finalized
                         ? "Finalizada"
                         : "Rascunho";
+
+                      // defina aqui a URL de detalhes (id vs public_code)
+                      const detailsHref = `/faes/${f.id}`;
+                      // se preferir por código público: const detailsHref = `/faes/${encodeURIComponent(f.public_code)}`;
+
                       return (
-                        <tr key={f.id} className="border-t">
+                        <tr
+                          key={f.id}
+                          className="border-t hover:bg-zinc-50 transition"
+                          onClick={() => {
+                            // clique na linha abre detalhes
+                            window.location.href = detailsHref;
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              window.location.href = detailsHref;
+                            }
+                          }}
+                        >
                           <td className="px-4 py-3 whitespace-nowrap font-medium">
-                            {f.public_code}
+                            <a
+                              href={detailsHref}
+                              className="text-zinc-900 hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {f.public_code}
+                            </a>
                           </td>
                           <td className="px-4 py-3">
-                            {f.client_id ? `#${f.client_id}` : "—"}
+                            <a
+                              href={detailsHref}
+                              className="hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Abrir detalhes"
+                            >
+                              {f.client_id ? `#${f.client_id}` : "—"}
+                            </a>
                           </td>
-                          <td className="px-4 py-3">{f.schema_title}</td>
+                          <td className="px-4 py-3">
+                            <a
+                              href={detailsHref}
+                              className="hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {f.schema_title}
+                            </a>
+                          </td>
                           <td className="px-4 py-3">{created}</td>
                           <td className="px-4 py-3">
                             <span
@@ -171,15 +211,25 @@ export default function FAESListPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="inline-flex gap-2">
+                              <a
+                                href={detailsHref}
+                                className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Ver detalhes"
+                              >
+                                Ver detalhes
+                              </a>
                               <button
                                 type="button"
                                 className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation(); // evita abrir detalhes ao clicar no botão
                                   const printable = await getFAESPrintable(
                                     f.id
                                   );
                                   await downloadFAESPdf(printable);
                                 }}
+                                title="Baixar PDF"
                               >
                                 Baixar PDF
                               </button>
