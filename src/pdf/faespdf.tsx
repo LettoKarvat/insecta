@@ -175,17 +175,17 @@ const S = StyleSheet.create({
   tr: { flexDirection: "row" },
   th: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 7.5,
     fontWeight: 700,
-    padding: 6,
+    padding: 4,
     borderRightWidth: 1,
     borderRightColor: THEME.border,
     borderRightStyle: "solid",
   },
   td: {
     flex: 1,
-    fontSize: 10,
-    padding: 6,
+    fontSize: 7.5,
+    padding: 4,
     borderTopWidth: 1,
     borderTopColor: THEME.border,
     borderTopStyle: "solid",
@@ -193,6 +193,16 @@ const S = StyleSheet.create({
     borderRightColor: THEME.border,
     borderRightStyle: "solid",
   },
+
+  // Colunas específicas para tabela de produtos planejados
+  colProduto: { flex: 1.2 },
+  colGrupo: { flex: 0.9 },
+  colRegistro: { flex: 1.1 },
+  colDiluente: { flex: 0.6 },
+  colQtd: { flex: 0.5 },
+  colPraga: { flex: 1.3 },
+  colEquip: { flex: 1.2 },
+  colAntidoto: { flex: 1.5 },
 
   rowMuted: { backgroundColor: "#ffffff" },
   rowZebra: { backgroundColor: "#f1f5f9" },
@@ -480,31 +490,29 @@ export function FAESPdfDoc({ printable }: { printable: FaesPrintable }) {
       <Section title="Produtos Planejados">
         <View style={S.table}>
           <View style={[S.tr, S.thead]}>
-            {[
-              "Produto",
-              "Grupo Químico",
-              "Registro MS",
-              "Diluente",
-              "Qtd",
-              "Praga Alvo",
-              "Equipamento",
-              "Antídoto",
-            ].map((h, i) => (
-              <Text key={i} style={[S.th, i === 7 && { borderRightWidth: 0 }]}>
-                {h}
-              </Text>
-            ))}
+            <Text style={[S.th, S.colProduto]}>Produto</Text>
+            <Text style={[S.th, S.colGrupo]}>Grupo Químico</Text>
+            <Text style={[S.th, S.colRegistro]}>Registro MS</Text>
+            <Text style={[S.th, S.colDiluente]}>Diluente</Text>
+            <Text style={[S.th, S.colQtd]}>Qtd</Text>
+            <Text style={[S.th, S.colPraga]}>Praga Alvo</Text>
+            <Text style={[S.th, S.colEquip]}>Equipamento</Text>
+            <Text style={[S.th, S.colAntidoto, { borderRightWidth: 0 }]}>
+              Antídoto
+            </Text>
           </View>
           {produtosPlanejados.map((p: any, idx: number) => (
             <View key={idx} style={[S.tr, idx % 2 ? S.rowZebra : S.rowMuted]}>
-              <Text style={S.td}>{p.produto}</Text>
-              <Text style={S.td}>{p.grupo_quimico}</Text>
-              <Text style={S.td}>{p.registro_ms}</Text>
-              <Text style={S.td}>{p.diluente}</Text>
-              <Text style={S.td}>{p.quantidade}</Text>
-              <Text style={S.td}>{p.praga_alvo}</Text>
-              <Text style={S.td}>{p.equipamento}</Text>
-              <Text style={[S.td, { borderRightWidth: 0 }]}>{p.antidoto}</Text>
+              <Text style={[S.td, S.colProduto]}>{p.produto}</Text>
+              <Text style={[S.td, S.colGrupo]}>{p.grupo_quimico}</Text>
+              <Text style={[S.td, S.colRegistro]}>{p.registro_ms}</Text>
+              <Text style={[S.td, S.colDiluente]}>{p.diluente}</Text>
+              <Text style={[S.td, S.colQtd]}>{p.quantidade}</Text>
+              <Text style={[S.td, S.colPraga]}>{p.praga_alvo}</Text>
+              <Text style={[S.td, S.colEquip]}>{p.equipamento}</Text>
+              <Text style={[S.td, S.colAntidoto, { borderRightWidth: 0 }]}>
+                {p.antidoto}
+              </Text>
             </View>
           ))}
         </View>
